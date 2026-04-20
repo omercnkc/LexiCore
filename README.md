@@ -382,17 +382,27 @@ The following items represent known gaps in the current implementation. Each ent
 
 ---
 
-#### `[ ]` Card Edit UI
-**What's missing:** `DeckDetailPage` has no inline card editing interface. The PATCH `/cards/{cardId}` endpoint exists at the API layer but the frontend has no form or modal wired to it.  
-**Why it matters:** Until the translation pipeline is automated, users have no UI path to correct or populate "TBD" translations. The deck is functionally unusable for study without this.  
-**Unblocks:** Usable decks for early adopters; prerequisite for any production beta.
+#### `[ ]` Pronunciation / Text-to-Speech (TTS)
+**What's missing:** The card schema includes a `pronunciation` field, but there is no pipeline to automatically fetch IPA data or text-to-speech audio for terms.  
+**Why it matters:** For language learning and rigorous vocabulary acquisition, auditory reinforcement is critical.  
+**Unblocks:** Multi-sensory study experience; complete language support.
 
 ---
 
-#### `[ ]` Card Delete UI
-**What's missing:** Similar to above — `DELETE /cards/{cardId}` exists on the API but there is no delete button/confirmation modal in the frontend.  
-**Why it matters:** Users cannot prune irrelevant terms extracted from PDFs without this. Poor extraction quality (false positives) permanently pollutes a deck.  
-**Unblocks:** Deck quality management; user trust.
+#### `[ ]` AI-Powered Semantic Extraction Filter
+**What's missing:** The current extraction pipeline is purely statistical and rule-based (heuristics). It lacks a semantic evaluation step.  
+**Why it matters:** Heuristics can let non-valuable words slip through (e.g., irrelevant proper nouns or edge-case adjectives). Passing candidate terms through a lightweight LLM prompt ("Is this an academic domain term?") would drastically reduce false positives.  
+**Unblocks:** True production-grade extraction quality requiring minimal user pruning.
+
+---
+
+#### `[x]` Card Edit UI
+**Status:** Completed. Users can now edit translations and terms inline to refine extracted cards.
+
+---
+
+#### `[x]` Card Delete UI
+**Status:** Completed. Users have a dedicated action to prune irrelevant terms extracted from PDFs.
 
 ---
 
