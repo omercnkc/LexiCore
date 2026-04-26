@@ -2,11 +2,16 @@ import { useEffect, useState } from "react";
 import { createCard, deleteCard, updateCard } from "../api/cardsApi";
 import { useAuth } from "../context/AuthContext";
 
-export default function CardManager({ deckId, initialCards, onCardChange }) {
+export default function CardManager({ deckId, initialCards, onCardChange, autoOpenForm }) {
   const { user, loading } = useAuth();
   const [cards, setCards] = useState(initialCards || []);
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState(null);
+
+  // Auto-open form when triggered from parent
+  useEffect(() => {
+    if (autoOpenForm) setIsAdding(true);
+  }, [autoOpenForm]);
   
   // Form states
   const [term, setTerm] = useState("");

@@ -1,19 +1,26 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import { fetchStudyQueue, submitCardReview } from "../api/studyApi";
+import { checkAnswer } from "../api/cardsApi";
 import { useAuth } from "../context/AuthContext";
 
 export default function StudyPage() {
   const { deckId } = useParams();
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
-  
+  const answerInputRef = useRef(null);
+
   const [queue, setQueue] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [isRevealed, setIsRevealed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  // Interactive answer state
+  const [userAnswer, setUserAnswer] = useState("");
+  const [answerResult, setAnswerResult] = useState(null); // null = not checked yet
+  const [checking, setChecking] = useState(false);
+  const [phase, setPhase] = useState("INPUT"); // INPUT, RESULT
 
   useEffect(() => {
     let isActive = true;
@@ -35,7 +42,7 @@ export default function StudyPage() {
         if (isActive) {
           setQueue(data.items || []);
           setCurrentIndex(0);
-          setIsRevealed(false);
+          resetCardState();
           setError("");
         }
       } catch (err) {
@@ -49,35 +56,88 @@ export default function StudyPage() {
     return () => { isActive = false; };
   }, [authLoading, deckId, user]);
 
-  const handleReveal = () => setIsRevealed(true);
+  // Focus input when card changes
+  useEffect(() => {
+    if (phase === "INPUT" && answerInputRef.current) {
+      answerInputRef.current.focus();
+    }
+  }, [currentIndex, phase]);
 
-  const handleFocusAction = (e) => {
-    // optional keyboard shortcuts could go here
+  const resetCardState = () => {
+    setUserAnswer("");
+    setAnswerResult(null);
+    setPhase("INPUT");
+    setChecking(false);
   };
 
   const currentCard = queue[currentIndex];
 
+  const handleCheckAnswer = async () => {
+    if (!currentCard || checking || !userAnswer.trim()) return;
+
+    setChecking(true);
+    try {
+      const result = await checkAnswer(user, currentCard.id, userAnswer.trim());
+      setAnswerResult(result);
+      setPhase("RESULT");
+    } catch (err) {
+      setError("Failed to check answer: " + err.message);
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter" && phase === "INPUT" && userAnswer.trim()) {
+      handleCheckAnswer();
+    }
+  };
+
   const handleRating = async (rating) => {
     if (authLoading || !user || !currentCard || submitting) return;
-    
+
     setSubmitting(true);
     try {
-      await submitCardReview(user, currentCard.id, rating);
-      
+      // Include answer data in the review record for analytics
+      const answerData = answerResult
+        ? {
+            is_correct: answerResult.is_correct,
+            similarity_score: answerResult.similarity_score,
+            user_answer: userAnswer.trim(),
+          }
+        : {};
+
+      await submitCardReview(user, currentCard.id, rating, answerData);
+
       // If rating was unknown, push the card to the end of the session queue to drill it until known
       if (rating === "unknown") {
         setQueue(prev => [...prev, currentCard]);
       }
-      
+
       // Move to next card
       setCurrentIndex(prev => prev + 1);
-      setIsRevealed(false);
-      
+      resetCardState();
+
     } catch (err) {
       alert("Failed to save review: " + err.message);
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const getSimilarityColor = (score) => {
+    if (score >= 80) return "#10b981";
+    if (score >= 50) return "#f59e0b";
+    if (score >= 25) return "#f97316";
+    return "#ef4444";
+  };
+
+  const getSimilarityLabel = (score) => {
+    if (score >= 90) return "Mükemmel!";
+    if (score >= 70) return "Çok yakın!";
+    if (score >= 50) return "Kısmen doğru";
+    if (score >= 25) return "Biraz yaklaştın";
+    return "Yanlış";
   };
 
   if (error) {
@@ -97,8 +157,8 @@ export default function StudyPage() {
   if (currentIndex >= queue.length) {
     return (
       <div className="page-section" style={{ textAlign: "center", paddingTop: "4rem" }}>
-        <h1 style={{ marginBottom: "1rem" }}>🎉 All Done!</h1>
-        <p style={{ color: "#555", marginBottom: "2rem" }}>You have completed all due cards for this deck.</p>
+        <h1 style={{ marginBottom: "1rem" }}>🎉 Tebrikler!</h1>
+        <p style={{ color: "#555", marginBottom: "2rem" }}>Bu deste için tüm kartları tamamladınız.</p>
         <Link to={`/decks/${deckId}`} className="primary-button">
           Finish & Return
         </Link>
@@ -107,7 +167,7 @@ export default function StudyPage() {
   }
 
   return (
-    <div className="page-section study-container" style={{ maxWidth: "600px", margin: "0 auto" }}>
+    <div className="page-section study-container" style={{ maxWidth: "640px", margin: "0 auto" }}>
       <div className="study-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
         <Link to={`/decks/${deckId}`} className="secondary-button" style={{ padding: "0.4rem 0.8rem" }}>
           Exit Session
@@ -117,69 +177,143 @@ export default function StudyPage() {
         </div>
       </div>
 
-      <div className="flashcard" onClick={!isRevealed ? handleReveal : null} style={{
-        background: "white", 
-        minHeight: "350px", 
-        borderRadius: "12px", 
-        boxShadow: "0 4px 14px rgba(0,0,0,0.08)", 
+      {/* Flashcard */}
+      <div className="flashcard" style={{
+        background: "white",
+        minHeight: "320px",
+        borderRadius: "16px",
+        boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
         padding: "2rem",
         display: "flex",
         flexDirection: "column",
         justifyContent: "center",
         alignItems: "center",
         textAlign: "center",
-        cursor: !isRevealed ? "pointer" : "default",
         border: "1px solid #eaeaea",
         transition: "all 0.3s ease"
       }}>
-        
-        <div className="card-front" style={{ marginBottom: isRevealed ? "2rem" : "0" }}>
-          <h2 style={{ fontSize: "2.5rem", margin: "0" }}>{currentCard.term}</h2>
-          {!isRevealed && <p style={{ marginTop: "1.5rem", color: "#999", fontSize: "0.9rem" }}>Tap to reveal answer</p>}
-        </div>
+        {/* Term display */}
+        <h2 style={{ fontSize: "2.5rem", margin: "0 0 0.5rem" }}>{currentCard.translation}</h2>
 
-        {isRevealed && (
-          <div className="card-back" style={{ width: "100%", paddingTop: "2rem", borderTop: "1px solid #eaeaea" }}>
-            <h3 style={{ fontSize: "1.8rem", color: "#0052cc", margin: "0 0 0.5rem 0" }}>{currentCard.translation}</h3>
-            
-            {currentCard.pronunciation && (
-              <p style={{ fontSize: "1.1rem", color: "#666", margin: "0 0 1rem 0" }}>🗣️ {currentCard.pronunciation}</p>
+        {/* Hint display */}
+        {currentCard.hint && (
+          <div className="hint-box">
+            💡 {currentCard.hint}
+          </div>
+        )}
+
+        {/* Answer Input Phase */}
+        {phase === "INPUT" && (
+          <div style={{ width: "100%", marginTop: "1.5rem" }}>
+            <input
+              ref={answerInputRef}
+              type="text"
+              className="answer-input"
+              placeholder="İngilizce kelimeyi yazın..."
+              value={userAnswer}
+              onChange={(e) => setUserAnswer(e.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={checking}
+              autoComplete="off"
+            />
+            <button
+              className="primary-button"
+              style={{ marginTop: "1rem", width: "100%" }}
+              onClick={handleCheckAnswer}
+              disabled={checking || !userAnswer.trim()}
+            >
+              {checking ? "Kontrol ediliyor..." : "Kontrol Et"}
+            </button>
+          </div>
+        )}
+
+        {/* Result Phase */}
+        {phase === "RESULT" && answerResult && (
+          <div style={{ width: "100%", marginTop: "1.5rem" }}>
+            {/* Similarity Badge */}
+            <div className="similarity-badge" style={{
+              background: answerResult.is_correct
+                ? "linear-gradient(135deg, #d1fae5, #a7f3d0)"
+                : "linear-gradient(135deg, #fee2e2, #fecaca)",
+              borderColor: answerResult.is_correct ? "#10b981" : "#ef4444",
+            }}>
+              <div className="similarity-score" style={{ color: getSimilarityColor(answerResult.similarity_score) }}>
+                %{Math.round(answerResult.similarity_score)}
+              </div>
+              <div className="similarity-label" style={{ color: getSimilarityColor(answerResult.similarity_score) }}>
+                {getSimilarityLabel(answerResult.similarity_score)}
+              </div>
+            </div>
+
+            {/* User's answer vs correct */}
+            <div className="answer-comparison">
+              <div className="answer-row">
+                <span className="answer-label">Senin cevabın (İngilizce):</span>
+                <span className={`answer-value ${answerResult.is_correct ? "answer-correct" : "answer-wrong"}`}>
+                  {userAnswer}
+                </span>
+              </div>
+              <div className="answer-row">
+                <span className="answer-label">Doğru kelime:</span>
+                <span className="answer-value answer-correct">{answerResult.correct_answer}</span>
+              </div>
+            </div>
+
+            {/* AI Feedback */}
+            {answerResult.feedback && (
+              <div className="feedback-card">
+                {answerResult.feedback}
+              </div>
             )}
-            
+
+            {/* Example Sentence */}
             {currentCard.example_sentence && (
-              <p style={{ fontSize: "1.1rem", fontStyle: "italic", margin: "0", color: "#333", background: "#f8f9fa", padding: "1rem", borderRadius: "8px" }}>
-                "{currentCard.example_sentence}"
-              </p>
+              <div style={{
+                marginTop: "1rem",
+                padding: "1rem",
+                background: "#f8f9fa",
+                borderRadius: "10px",
+                fontStyle: "italic",
+                color: "#555",
+                fontSize: "0.95rem"
+              }}>
+                📖 "{currentCard.example_sentence}"
+              </div>
             )}
           </div>
         )}
       </div>
 
-      {isRevealed && (
-        <div className="rating-actions" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.75rem", marginTop: "2rem" }}>
-          <button 
+      {/* Rating buttons — only show after answer check */}
+      {phase === "RESULT" && (
+        <div className="rating-actions" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.75rem", marginTop: "1.5rem" }}>
+          <button
             disabled={submitting}
             onClick={() => handleRating("unknown")}
-            style={{ padding: "1rem 0", background: "#fee2e2", color: "#b91c1c", border: "none", borderRadius: "8px", fontWeight: "bold", cursor: submitting ? "wait" : "pointer" }}>
-            Unknown
+            className="rating-btn rating-unknown"
+          >
+            Bilmiyorum
           </button>
-          <button 
+          <button
             disabled={submitting}
             onClick={() => handleRating("hard")}
-            style={{ padding: "1rem 0", background: "#ffedd5", color: "#c2410c", border: "none", borderRadius: "8px", fontWeight: "bold", cursor: submitting ? "wait" : "pointer" }}>
-            Hard
+            className="rating-btn rating-hard"
+          >
+            Zor
           </button>
-          <button 
+          <button
             disabled={submitting}
             onClick={() => handleRating("medium")}
-            style={{ padding: "1rem 0", background: "#e0f2fe", color: "#0369a1", border: "none", borderRadius: "8px", fontWeight: "bold", cursor: submitting ? "wait" : "pointer" }}>
-            Medium
+            className="rating-btn rating-medium"
+          >
+            Orta
           </button>
-          <button 
+          <button
             disabled={submitting}
             onClick={() => handleRating("easy")}
-            style={{ padding: "1rem 0", background: "#dcfce7", color: "#15803d", border: "none", borderRadius: "8px", fontWeight: "bold", cursor: submitting ? "wait" : "pointer" }}>
-            Easy
+            className="rating-btn rating-easy"
+          >
+            Kolay
           </button>
         </div>
       )}

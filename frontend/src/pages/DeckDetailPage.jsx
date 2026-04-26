@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useNavigate } from "react-router-dom";
 
-import { fetchDeck } from "../api/decksApi";
+import { fetchDeck, deleteDeck } from "../api/decksApi";
 import { fetchDeckCards } from "../api/cardsApi";
 import { ApiAuthError } from "../api/apiClient";
 import { useAuth } from "../context/AuthContext";
@@ -14,11 +14,14 @@ import CardManager from "../components/CardManager";
 
 export default function DeckDetailPage() {
   const { deckId } = useParams();
+  const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
   const [deck, setDeck] = useState(null);
   const [cards, setCards] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [showAddOptions, setShowAddOptions] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     let isActive = true;
@@ -83,71 +86,126 @@ export default function DeckDetailPage() {
     }
   };
 
+  const handleDeleteDeck = async () => {
+    if (!window.confirm(`"${deck.title}" dersini ve tüm kartlarını silmek istediğinize emin misiniz?`)) return;
+    setDeleting(true);
+    try {
+      await deleteDeck(user, deckId);
+      navigate("/lessons", { replace: true });
+    } catch (err) {
+      alert("Silinemedi: " + err.message);
+      setDeleting(false);
+    }
+  };
+
   return (
     <section className="page-section">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">Deck detail</p>
-          <h1>{loading ? "Loading deck..." : deck?.title || "Deck not found"}</h1>
+          <p className="eyebrow">Ders Detayı</p>
+          <h1>{loading ? "Yükleniyor..." : deck?.title || "Ders bulunamadı"}</h1>
         </div>
         <div className="inline-actions">
           {deck?.card_count > 0 && (
             <Link className="primary-button" to={`/decks/${deck.id}/study`} style={{ background: "#10b981", borderColor: "#10b981" }}>
-              Start Study
+              Çalışmaya Başla
             </Link>
           )}
-          <Link className="secondary-button" to="/dashboard">
-            Back to dashboard
+          <Link className="secondary-button" to="/lessons">
+            Derslere Dön
           </Link>
-          <Link className="primary-button" to="/decks/new">
-            Create another deck
-          </Link>
+          {deck && (
+            <button
+              className="secondary-button"
+              style={{ color: "#dc2626", borderColor: "#dc2626" }}
+              onClick={handleDeleteDeck}
+              disabled={deleting}
+            >
+              {deleting ? "Siliniyor..." : "Dersi Sil"}
+            </button>
+          )}
         </div>
       </div>
 
       {error ? <div className="form-error">{error}</div> : null}
 
-      {loading ? <div className="content-card">Loading deck details...</div> : null}
+      {loading ? <div className="content-card">Ders bilgileri yükleniyor...</div> : null}
 
       {!loading && !error && deck ? (
         <>
           <section className="deck-detail-hero">
             <div>
-              <p className="eyebrow">Course / topic</p>
+              <p className="eyebrow">Ders / Konu</p>
               <h2>{formatDeckCourseTopic(deck)}</h2>
             </div>
             <div className="deck-meta-stack">
-              <span>Created {formatDeckDate(deck.created_at)}</span>
-              <span>Updated {formatDeckDate(deck.updated_at)}</span>
+              <span>Oluşturulma {formatDeckDate(deck.created_at)}</span>
+              <span>Güncelleme {formatDeckDate(deck.updated_at)}</span>
             </div>
           </section>
 
           <section className="detail-grid">
             <article className="content-card">
-              <p className="eyebrow">Overview</p>
-              <h3>MVP deck metadata</h3>
+              <p className="eyebrow">Genel Bilgi</p>
+              <h3>Ders Özeti</h3>
               <div className="detail-list">
                 <div className="detail-item">
-                  <span>Source type</span>
-                  <strong>{deck.source_type}</strong>
+                  <span>Kaynak Türü</span>
+                  <strong>{deck.source_type === "file" ? "PDF" : "Manuel"}</strong>
                 </div>
                 <div className="detail-item">
-                  <span>Source file</span>
-                  <strong>{deck.source_file_name || "None attached"}</strong>
+                  <span>Kaynak Dosya</span>
+                  <strong>{deck.source_file_name || "Yok"}</strong>
                 </div>
                 <div className="detail-item">
-                  <span>Progress</span>
+                  <span>İlerleme</span>
                   <strong>{formatDeckProgress(deck.progress_percent)}</strong>
                 </div>
                 <div className="detail-item">
-                  <span>Cards</span>
+                  <span>Kartlar</span>
                   <strong>{deck.card_count}</strong>
                 </div>
               </div>
             </article>
 
-            <article style={{ gridColumn: "1 / -1", marginTop: "2rem" }}>
-              <CardManager key={deck.id} deckId={deck.id} initialCards={cards} onCardChange={handleCardCountChange} />
+            {/* Add Cards Section */}
+            <article className="content-card">
+              <p className="eyebrow">Kart Ekle</p>
+              <h3>Yeni kartlar oluştur</h3>
+              <p>PDF yükleyerek AI ile otomatik kart oluşturabilir veya manuel olarak kart ekleyebilirsiniz.</p>
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "1rem" }}>
+                <Link
+                  className="primary-button"
+                  to={`/decks/${deck.id}/upload`}
+                  style={{ textAlign: "center", background: "#4f46e5" }}
+                >
+                  📄 PDF ile AI Analizi
+                </Link>
+                <button
+                  className="secondary-button"
+                  style={{ textAlign: "center" }}
+                  onClick={() => {
+                    setShowAddOptions(true);
+                    // Scroll to CardManager
+                    setTimeout(() => {
+                      const el = document.getElementById("card-manager-section");
+                      if (el) el.scrollIntoView({ behavior: "smooth" });
+                    }, 100);
+                  }}
+                >
+                  ✏️ Manuel Kart Ekle
+                </button>
+              </div>
+            </article>
+
+            <article id="card-manager-section" style={{ gridColumn: "1 / -1", marginTop: "2rem" }}>
+              <CardManager
+                key={deck.id}
+                deckId={deck.id}
+                initialCards={cards}
+                onCardChange={handleCardCountChange}
+                autoOpenForm={showAddOptions}
+              />
             </article>
           </section>
         </>

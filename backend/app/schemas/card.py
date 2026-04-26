@@ -9,6 +9,7 @@ class CardCreateRequest(BaseModel):
     translation: str = Field(min_length=1, max_length=200)
     pronunciation: Optional[str] = Field(None, max_length=100)
     example_sentence: Optional[str] = Field(None, max_length=500)
+    hint: Optional[str] = Field(None, max_length=300)
     source_reference: Optional[str] = Field(None, max_length=200)
 
     @field_validator("term", "translation")
@@ -25,6 +26,7 @@ class CardUpdateRequest(BaseModel):
     translation: Optional[str] = Field(None, min_length=1, max_length=200)
     pronunciation: Optional[str] = Field(None, max_length=100)
     example_sentence: Optional[str] = Field(None, max_length=500)
+    hint: Optional[str] = Field(None, max_length=300)
     source_reference: Optional[str] = Field(None, max_length=200)
 
     @field_validator("term", "translation")
@@ -46,6 +48,7 @@ class CardResponse(BaseModel):
     translation: str
     pronunciation: Optional[str] = None
     example_sentence: Optional[str] = None
+    hint: Optional[str] = None
     source_reference: Optional[str] = None
     created_at: datetime
     updated_at: datetime

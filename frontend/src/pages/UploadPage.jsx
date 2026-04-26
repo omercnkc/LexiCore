@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { uploadFile, extractTerms, generateCards } from "../api/uploadsApi";
 import { useAuth } from "../context/AuthContext";
 
 export default function UploadPage() {
+  const { deckId } = useParams();
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
 
@@ -18,33 +19,27 @@ export default function UploadPage() {
   const [error, setError] = useState("");
   const [statusText, setStatusText] = useState("");
 
-  // Deck State
-  const [deckForm, setDeckForm] = useState({
-    title: "",
-    course_name: "",
-    topic_name: "",
-  });
-
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files[0]) {
       setFile(e.target.files[0]);
+      setError("");
     }
   };
 
   const handleUploadAndExtract = async (e) => {
     e.preventDefault();
     if (authLoading || !user) {
-      setError("Your session is still loading. Please try again.");
+      setError("Oturumunuz yükleniyor, lütfen tekrar deneyin.");
       return;
     }
 
     if (!file) {
-      setError("Please select a file first.");
+      setError("Lütfen bir dosya seçin.");
       return;
     }
 
     if (file.type !== "application/pdf") {
-      setError("Only PDF files are supported currently.");
+      setError("Şu anda sadece PDF dosyaları desteklenmektedir.");
       return;
     }
 
@@ -52,26 +47,28 @@ export default function UploadPage() {
     setError("");
 
     try {
-      setStatusText("Uploading file...");
+      setStatusText("Dosya yükleniyor...");
       const uploadRes = await uploadFile(user, file);
       setUploadId(uploadRes.id);
 
-      setStatusText("Extracting candidate terms...");
+      setStatusText("AI dokümanınızı analiz ediyor — bu biraz zaman alabilir...");
       const extractRes = await extractTerms(user, uploadRes.id);
 
       if (!extractRes.terms || extractRes.terms.length === 0) {
-        setError("No terminology could be extracted from this document.");
+        setError("Bu dokümandan terim çıkarılamadı.");
         setPhase("UPLOAD");
         return;
       }
 
-      setExtractedTerms(extractRes.terms.map((t) => t.term));
+      setExtractedTerms(extractRes.terms);
       setSelectedTerms(new Set(extractRes.terms.map((t) => t.term)));
       setPhase("PREVIEW");
       setStatusText("");
     } catch (err) {
-      setError(err.response?.data?.detail || err.message || "Failed to process file.");
+      const detail = err.response?.data?.detail || err.message || "Dosya işlenemedi.";
+      setError(detail);
       setPhase("UPLOAD");
+      setStatusText("");
     }
   };
 
@@ -85,24 +82,14 @@ export default function UploadPage() {
     setSelectedTerms(newKeys);
   };
 
-  const handleDeckFormChange = (event) => {
-    const { name, value } = event.target;
-    setDeckForm((current) => ({ ...current, [name]: value }));
-  };
-
   const handleGenerateCards = async () => {
     if (authLoading || !user) {
-      setError("Your session is still loading. Please try again.");
+      setError("Oturumunuz yükleniyor, lütfen tekrar deneyin.");
       return;
     }
 
     if (selectedTerms.size === 0) {
-      setError("Please select at least one term.");
-      return;
-    }
-
-    if (!deckForm.title.trim() || !deckForm.course_name.trim() || !deckForm.topic_name.trim()) {
-      setError("Title, course name, and topic name are required.");
+      setError("Lütfen en az bir terim seçin.");
       return;
     }
 
@@ -112,20 +99,18 @@ export default function UploadPage() {
     try {
       const payload = {
         upload_id: uploadId,
-        deck_title: deckForm.title.trim(),
-        course_name: deckForm.course_name.trim(),
-        topic_name: deckForm.topic_name.trim(),
+        deck_id: deckId,
         terms: Array.from(selectedTerms),
       };
 
       const res = await generateCards(user, uploadId, payload);
       if (!res?.deck_id) {
-        throw new Error("The backend did not return a generated deck.");
+        throw new Error("Backend deste ID döndürmedi.");
       }
 
       navigate(`/decks/${res.deck_id}`, { replace: true });
     } catch (err) {
-      setError(err.response?.data?.detail || err.message || "Failed to generate cards.");
+      setError(err.response?.data?.detail || err.message || "Kartlar oluşturulamadı.");
       setPhase("PREVIEW");
     }
   };
@@ -134,11 +119,11 @@ export default function UploadPage() {
     <section className="page-section">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">Smart Creation</p>
-          <h1>Upload File</h1>
+          <p className="eyebrow">AI Analizi</p>
+          <h1>PDF ile Kart Oluştur</h1>
         </div>
-        <Link className="secondary-button" to="/dashboard">
-          Back to dashboard
+        <Link className="secondary-button" to={`/decks/${deckId}`}>
+          Derse Dön
         </Link>
       </div>
 
@@ -146,24 +131,29 @@ export default function UploadPage() {
         {phase === "UPLOAD" || phase === "EXTRACTING" ? (
           <>
             <div className="content-card content-card-muted">
-              <p className="eyebrow">Source Material</p>
-              <h2>Provide your PDF</h2>
+              <p className="eyebrow">Kaynak Materyal</p>
+              <h2>PDF Yükleyin</h2>
               <p>
-                LexiCore will extract likely academic terms from your document. You will be able to
-                preview and select the terms before generating flashcards.
+                LexiCore, AI kullanarak dokümanınızdaki en önemli akademik terimleri çıkaracak ve
+                çeviri, örnek cümle ve ipucu içeren flashcard'lar oluşturacak.
               </p>
             </div>
 
             <form className="content-card deck-form" onSubmit={handleUploadAndExtract}>
               <div className="form-header">
-                <h2>Upload details</h2>
+                <h2>Dosya Yükleme</h2>
               </div>
 
               {error ? <div className="form-error">{error}</div> : null}
-              {statusText ? <div style={{ marginBottom: "1rem", color: "#6366f1" }}>{statusText}</div> : null}
+              {statusText ? (
+                <div className="ai-status-banner">
+                  <span className="ai-status-dot"></span>
+                  {statusText}
+                </div>
+              ) : null}
 
               <label className="auth-field">
-                <span>File (PDF only)</span>
+                <span>Dosya (sadece PDF)</span>
                 <input
                   type="file"
                   accept="application/pdf"
@@ -175,7 +165,7 @@ export default function UploadPage() {
 
               <div className="form-actions">
                 <button className="primary-button" disabled={phase !== "UPLOAD" || !file} type="submit">
-                  {phase === "UPLOAD" ? "Upload & Extract" : "Processing..."}
+                  {phase === "UPLOAD" ? "Yükle & AI ile Analiz Et" : "Analiz ediliyor..."}
                 </button>
               </div>
             </form>
@@ -183,63 +173,44 @@ export default function UploadPage() {
         ) : (
           <>
             <div className="content-card content-card-muted">
-              <p className="eyebrow">Preview</p>
-              <h2>Select Terms & Setup Deck</h2>
+              <p className="eyebrow">AI Önizleme</p>
+              <h2>AI Tarafından Bulunan Terimler</h2>
               <p>
-                Review the {extractedTerms.length} candidate terms found. Uncheck any terms you do not wish to study. 
-                Translations will be initialized as "TBD" for you to fill in.
+                Gemini AI {extractedTerms.length} önemli terim buldu. Her terim Türkçe çeviri,
+                örnek cümle ve ipucu içerir.
               </p>
             </div>
-            
+
             <div className="content-card deck-form">
               {error ? <div className="form-error">{error}</div> : null}
 
               <div className="form-header">
-                <h2>Deck Information</h2>
+                <h2>Terim Önizleme ({selectedTerms.size} seçili)</h2>
               </div>
-              <label className="auth-field">
-                <span>Title</span>
-                <input
-                  name="title"
-                  value={deckForm.title}
-                  onChange={handleDeckFormChange}
-                  placeholder="Ex: Unit 2 Pathogens"
-                  required
-                />
-              </label>
-              <label className="auth-field">
-                <span>Course name</span>
-                <input
-                  name="course_name"
-                  value={deckForm.course_name}
-                  onChange={handleDeckFormChange}
-                  placeholder="Ex: Microbiology"
-                  required
-                />
-              </label>
-              <label className="auth-field">
-                <span>Topic name</span>
-                <input
-                  name="topic_name"
-                  value={deckForm.topic_name}
-                  onChange={handleDeckFormChange}
-                  placeholder="Ex: Bacteria"
-                  required
-                />
-              </label>
 
-              <div className="form-header" style={{ marginTop: "2rem" }}>
-                <h2>Terms Preview ({selectedTerms.size} selected)</h2>
-              </div>
-              <div style={{ maxHeight: "300px", overflowY: "auto", border: "1px solid #e2e8f0", padding: "1rem", borderRadius: "8px" }}>
-                {extractedTerms.map((term, idx) => (
-                  <label key={idx} style={{ display: "flex", gap: "0.5rem", alignItems: "center", marginBottom: "0.5rem", cursor: "pointer" }}>
-                    <input
-                      type="checkbox"
-                      checked={selectedTerms.has(term)}
-                      onChange={() => toggleTerm(term)}
-                    />
-                    <span>{term}</span>
+              <div className="terms-preview-list">
+                {extractedTerms.map((termData, idx) => (
+                  <label
+                    key={idx}
+                    className={`term-preview-card ${selectedTerms.has(termData.term) ? "term-selected" : "term-deselected"}`}
+                  >
+                    <div className="term-preview-header">
+                      <input
+                        type="checkbox"
+                        checked={selectedTerms.has(termData.term)}
+                        onChange={() => toggleTerm(termData.term)}
+                      />
+                      <span className="term-preview-word">{termData.term}</span>
+                      {termData.translation && (
+                        <span className="term-preview-translation">{termData.translation}</span>
+                      )}
+                    </div>
+                    {termData.example_sentence && (
+                      <p className="term-preview-sentence">"{termData.example_sentence}"</p>
+                    )}
+                    {termData.hint && (
+                      <p className="term-preview-hint">💡 {termData.hint}</p>
+                    )}
                   </label>
                 ))}
               </div>
@@ -250,14 +221,14 @@ export default function UploadPage() {
                   disabled={authLoading || phase === "GENERATING" || selectedTerms.size === 0}
                   onClick={handleGenerateCards}
                 >
-                  {phase === "GENERATING" ? "Generating..." : "Generate Deck"}
+                  {phase === "GENERATING" ? "Oluşturuluyor..." : `${selectedTerms.size} Kart Oluştur`}
                 </button>
                 <button
                   className="secondary-button"
                   onClick={() => { setPhase("UPLOAD"); setFile(null); }}
                   disabled={phase === "GENERATING"}
                 >
-                  Cancel
+                  İptal
                 </button>
               </div>
             </div>

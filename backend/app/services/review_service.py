@@ -97,7 +97,10 @@ class ReviewService:
                 "previous_interval": prev_interval,
                 "new_interval": new_interval,
                 "previous_ease_factor": prev_ease,
-                "new_ease_factor": new_ease
+                "new_ease_factor": new_ease,
+                "is_correct": payload.is_correct,
+                "similarity_score": payload.similarity_score,
+                "user_answer": payload.user_answer,
             }
             transaction.set(record_ref, record_data)
             

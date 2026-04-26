@@ -44,3 +44,16 @@ export async function deleteCard(user, cardId) {
   // 204 No Content
   return true;
 }
+
+export async function checkAnswer(user, cardId, userAnswer) {
+  const response = await authorizedFetch(`/api/cards/${cardId}/check-answer`, {
+    user,
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ user_answer: userAnswer }),
+  });
+  return readJsonResponse(response, "Failed to check answer.");
+}
+
