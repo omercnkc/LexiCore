@@ -22,6 +22,16 @@ class DeckCreateRequest(BaseModel):
             raise ValueError("This field cannot be blank.")
         return cleaned
 
+class DeckUpdateRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=120)
+
+    @field_validator("title")
+    @classmethod
+    def strip_and_validate(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("This field cannot be blank.")
+        return cleaned
 
 class DeckResponse(BaseModel):
     id: str

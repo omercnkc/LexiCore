@@ -30,6 +30,7 @@ class Settings:
     firebase_project_id: str
     firebase_service_account_path: Path
     firebase_storage_bucket: str
+    gemini_api_key: str
 
 @lru_cache
 def get_settings() -> Settings:
@@ -45,4 +46,5 @@ def get_settings() -> Settings:
         firebase_storage_bucket=os.getenv(
             "FIREBASE_STORAGE_BUCKET", DEFAULT_FIREBASE_STORAGE_BUCKET
         ),
+        gemini_api_key=os.getenv("GEMINI_API_KEY", ""),
     )

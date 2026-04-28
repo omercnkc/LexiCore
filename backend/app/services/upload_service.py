@@ -1,7 +1,6 @@
 import io
 import re
 import uuid
-from collections import Counter
 from datetime import datetime, timezone
 
 from fastapi import UploadFile, HTTPException, status
@@ -13,133 +12,37 @@ from app.schemas.deck import DeckCreateRequest, DeckSourceType
 from app.schemas.card import CardCreateRequest
 from app.services.deck_service import get_deck_service
 from app.services.card_service import get_card_service
+from app.services.gemini_service import extract_terms_from_pdf_bytes, enrich_terms_with_details
 
 
 class UploadService:
     collection_name = "uploads"
-    max_candidate_terms = 50
-    academic_suffixes = (
-        "tion",
-        "sion",
-        "ment",
-        "ness",
-        "ity",
-        "ism",
-        "ist",
-        "ology",
-        "logy",
-        "graphy",
-        "pathy",
-        "osis",
-        "emia",
-        "scope",
-        "meter",
-        "lysis",
-        "genesis",
-        "phobia",
-        "philia",
-        "cyte",
-        "genic",
-        "ative",
-        "ence",
-        "ance",
-    )
-    blocked_suffixes = (
-        "able",
-        "ible",
-        "al",
-        "ary",
-        "ful",
-        "ic",
-        "ical",
-        "ish",
-        "ive",
-        "less",
-        "like",
-        "ous",
-        "y",
-    )
-    protected_short_terms = {
-        "acid",
-        "cell",
-        "gene",
-        "host",
-        "mass",
-        "rate",
-        "soil",
-        "atom",
-        "mole",
-    }
-    stopwords = {
-        "about", "above", "across", "after", "again", "against", "all", "along", "already", "also",
-        "although", "always", "among", "another", "any", "anyone", "anything", "around", "because",
-        "before", "being", "below", "between", "both", "but", "can", "cannot", "could", "despite",
-        "during", "each", "either", "enough", "especially", "every", "everyone", "everything", "few",
-        "for", "from", "further", "had", "has", "have", "having", "here", "however", "into", "its",
-        "itself", "just", "least", "less", "many", "may", "might", "more", "most", "much", "must",
-        "near", "nearly", "neither", "next", "none", "nor", "not", "often", "onto", "other", "others",
-        "our", "ours", "overall", "per", "perhaps", "rather", "same", "several", "since", "some",
-        "such", "than", "that", "their", "theirs", "them", "then", "there", "therefore", "these",
-        "they", "this", "those", "through", "throughout", "toward", "towards", "under", "until", "upon",
-        "very", "well", "were", "what", "when", "where", "whether", "which", "while", "who", "whom",
-        "whose", "why", "with", "within", "without", "would", "your", "yours",
-    }
-    conjunctions = {
-        "and", "or", "but", "yet", "so", "nor", "for", "after", "although", "because", "before",
-        "once", "since", "than", "though", "unless", "until", "when", "whenever", "whereas", "while",
-    }
-    pronouns = {
-        "he", "her", "hers", "herself", "him", "himself", "his", "i", "it", "me", "mine", "my",
-        "myself", "our", "ourselves", "she", "their", "theirs", "them", "themselves", "they", "us",
-        "we", "you", "your", "yours", "yourself", "yourselves",
-    }
-    common_adjectives = {
-        "basic", "better", "broad", "central", "clear", "clinical", "common", "complex", "current",
-        "different", "difficult", "early", "effective", "entire", "essential", "general", "good",
-        "great", "high", "human", "important", "large", "late", "little", "local", "long", "major",
-        "medical", "modern", "molecular", "national", "new", "normal", "old", "other", "overall",
-        "particular", "physical", "possible", "present", "primary", "public", "recent", "relative",
-        "same", "similar", "simple", "single", "small", "specific", "standard", "strong", "total",
-        "true", "various", "whole", "young",
-    }
-    common_verbs = {
-        "affect", "allow", "appear", "become", "begin", "cause", "change", "compare", "contain",
-        "continue", "control", "create", "define", "describe", "develop", "direct", "discuss", "exist",
-        "explain", "follow", "found", "identify", "include", "increase", "indicate", "involve", "known",
-        "lead", "learn", "made", "make", "means", "occur", "produce", "provide", "remain", "result",
-        "show", "suggest", "study", "used", "using",
-    }
-    common_first_names = {
-        "alex", "alice", "anna", "ben", "charles", "david", "emily", "emma", "ethan", "grace", "henry",
-        "isabella", "jack", "jacob", "james", "jane", "john", "joseph", "liam", "lucas", "maria", "mary",
-        "michael", "olivia", "robert", "sam", "sarah", "sophia", "thomas", "william",
-    }
-    
+
     def __init__(self, firestore_client, storage_bucket):
         self.firestore_client = firestore_client
         self.storage_bucket = storage_bucket
-        
+
     @property
     def collection(self):
         return self.firestore_client.collection(self.collection_name)
-        
+
     async def process_upload(self, user_id: str, file: UploadFile) -> UploadResponse:
         if not file.filename.lower().endswith(".pdf"):
             raise HTTPException(status_code=400, detail="Only PDF files are currently supported for MVP.")
-            
+
         upload_id = str(uuid.uuid4())
         safe_filename = file.filename
         storage_path = f"uploads/{user_id}/{upload_id}_{safe_filename}"
-        
+
         try:
             # Upload to Firebase Storage
             blob = self.storage_bucket.blob(storage_path)
             content = await file.read()
             blob.upload_from_string(content, content_type="application/pdf")
-            
+
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Storage error: {e}")
-            
+
         # Store metadata in Firestore
         doc_data = {
             "user_id": user_id,
@@ -149,9 +52,9 @@ class UploadService:
             "created_at": datetime.now(timezone.utc),
             "extraction_status": "pending"
         }
-        
+
         self.collection.document(upload_id).set(doc_data)
-        
+
         return UploadResponse(id=upload_id, file_name=safe_filename, status="pending")
 
     def extract_terms(self, user_id: str, upload_id: str) -> list[CandidateTerm]:
@@ -159,49 +62,71 @@ class UploadService:
         doc = doc_ref.get()
         if not doc.exists:
             raise HTTPException(status_code=404, detail="Upload not found")
-            
+
         data = doc.to_dict()
         if data.get("user_id") != user_id:
             raise HTTPException(status_code=403, detail="Not authorized")
-            
+
+        # Check if we already have cached AI terms
+        cached_terms = data.get("ai_terms")
+        if cached_terms and isinstance(cached_terms, list) and len(cached_terms) > 0:
+            return [
+                CandidateTerm(
+                    term=t.get("term", ""),
+                    translation=t.get("translation"),
+                    example_sentence=t.get("example_sentence"),
+                    hint=t.get("hint"),
+                    context=t.get("context"),
+                )
+                for t in cached_terms
+                if t.get("term")
+            ]
+
         storage_path = data.get("storage_path")
-        
+
         try:
             blob = self.storage_bucket.blob(storage_path)
             content = blob.download_as_bytes()
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Failed to read file from storage: {e}")
-            
-        try:
-            text = self._extract_text_from_pdf(content)
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Error parsing PDF: {e}")
 
-        terms = self._extract_candidate_terms(text)
-        
-        # Update extraction status
-        doc_ref.update({"extraction_status": "completed"})
-        
-        return terms
+        # Use Gemini AI for intelligent term extraction directly from PDF bytes
+        try:
+            ai_terms = extract_terms_from_pdf_bytes(content, max_terms=50)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"AI term extraction failed: {e}")
+
+        # Cache AI terms (just the list of strings) in Firestore
+        doc_ref.update({
+            "extraction_status": "completed",
+            "ai_terms": ai_terms,
+        })
+
+        results = [
+            CandidateTerm(term=t)
+            for t in ai_terms
+        ]
+
+        return results
 
     def generate_cards(self, user_id: str, payload: GenerateCardsRequest) -> str:
         doc_ref = self.collection.document(payload.upload_id)
         doc = doc_ref.get()
         if not doc.exists:
             raise HTTPException(status_code=404, detail="Upload not found")
-            
+
         data = doc.to_dict()
         if data.get("user_id") != user_id:
             raise HTTPException(status_code=403, detail="Not authorized")
-            
+
         deck_service = get_deck_service()
         card_service = get_card_service()
-        
+
         deck_id = payload.deck_id or data.get("generated_deck_id")
         if not deck_id:
             if not payload.deck_title or not payload.course_name or not payload.topic_name:
                 raise HTTPException(status_code=400, detail="Missing new deck information")
-            
+
             req = DeckCreateRequest(
                 title=payload.deck_title,
                 course_name=payload.course_name,
@@ -228,21 +153,58 @@ class UploadService:
             if self._normalize_term(card.term)
         }
 
+        # Enrich the selected terms with AI details (Step 2)
+        enriched_data = enrich_terms_with_details(payload.terms)
+        enriched_lookup = {self._normalize_term(item["term"]): item for item in enriched_data}
+
+        # We will use a batch to write all cards efficiently
+        batch = self.firestore_client.batch()
+        cards_added_count = 0
+        timestamp = datetime.now(timezone.utc)
+
         for term_str in payload.terms:
             normalized_term = self._normalize_term(term_str)
             if not normalized_term or normalized_term in existing_terms:
                 continue
 
-            # MVP assigns "TBD" as translation to comply with schema validator
-            # Future expansion can use an LLM or dictionary service here
-            card_req = CardCreateRequest(
-                term=term_str.strip(),
-                translation="TBD",
-                source_reference=data.get("file_name")
-            )
-            card_service.create_card(user_id=user_id, deck_id=deck_id, payload=card_req)
+            # Look up rich data from enrichment step
+            ai_data = enriched_lookup.get(normalized_term, {})
+
+            card_ref = card_service.collection.document()
+            card_data = {
+                "deck_id": deck_id,
+                "user_id": user_id,
+                "term": term_str.strip(),
+                "translation": ai_data.get("translation") or "—",
+                "pronunciation": None,
+                "example_sentence": ai_data.get("example_sentence"),
+                "example_translation": ai_data.get("example_translation"),
+                "hint": ai_data.get("hint"),
+                "source_reference": data.get("file_name"),
+                "created_at": timestamp,
+                "updated_at": timestamp,
+                "next_review_at": timestamp,
+                "interval": 0,
+                "ease_factor": 2.5,
+                "review_count": 0,
+            }
+            batch.set(card_ref, card_data)
             existing_terms.add(normalized_term)
-            
+            cards_added_count += 1
+
+        # Only update deck and commit batch if new cards were added
+        if cards_added_count > 0:
+            deck_ref = deck_service.collection.document(deck_id)
+            # Increment deck card_count by cards_added_count
+            deck_snapshot = deck_ref.get()
+            if deck_snapshot.exists:
+                current_count = deck_snapshot.to_dict().get("card_count", 0)
+                batch.update(deck_ref, {
+                    "card_count": current_count + cards_added_count,
+                    "updated_at": timestamp
+                })
+            batch.commit()
+
         return deck_id
 
     def _extract_text_from_pdf(self, content: bytes) -> str:
@@ -253,99 +215,6 @@ class UploadService:
             if extracted:
                 pages.append(extracted)
         return "\n".join(pages)
-
-    def _extract_candidate_terms(self, text: str) -> list[CandidateTerm]:
-        normalized_text = text.replace("\u00ad", "").replace("\r", "\n")
-        tokens = re.findall(r"\b[A-Za-z][A-Za-z-]{2,29}\b", normalized_text)
-        if not tokens:
-            return []
-
-        lower_tokens = [token.lower() for token in tokens]
-        frequencies = Counter(lower_tokens)
-        title_case_hits = Counter(
-            token.lower()
-            for token in tokens
-            if token[0].isupper() and not token.isupper()
-        )
-
-        scored_terms: list[tuple[float, str, int]] = []
-        seen_terms: set[str] = set()
-        for token in lower_tokens:
-            if token in seen_terms:
-                continue
-
-            seen_terms.add(token)
-            frequency = frequencies[token]
-            if not self._is_likely_term(token, frequency, title_case_hits[token]):
-                continue
-
-            score = self._score_term(token, frequency, title_case_hits[token])
-            scored_terms.append((score, token, frequency))
-
-        scored_terms.sort(key=lambda item: (-item[0], -item[2], item[1]))
-
-        results: list[CandidateTerm] = []
-        for _, token, frequency in scored_terms[: self.max_candidate_terms]:
-            results.append(
-                CandidateTerm(
-                    term=self._display_term(token),
-                    context=f"Observed {frequency} times in PDF",
-                )
-            )
-
-        return results
-
-    def _is_likely_term(self, token: str, frequency: int, title_case_hits: int) -> bool:
-        if len(token) < 4 and token not in self.protected_short_terms:
-            return False
-
-        if any(char.isdigit() for char in token):
-            return False
-
-        if token in self.stopwords or token in self.conjunctions or token in self.pronouns:
-            return False
-
-        if token in self.common_adjectives or token in self.common_verbs or token in self.common_first_names:
-            return False
-
-        if token.endswith("ing") and frequency < 3:
-            return False
-
-        if any(token.endswith(suffix) for suffix in self.blocked_suffixes) and frequency < 3:
-            return False
-
-        if title_case_hits > 0 and frequency == 1 and not any(
-            token.endswith(suffix) for suffix in self.academic_suffixes
-        ):
-            return False
-
-        if frequency < 2 and not any(token.endswith(suffix) for suffix in self.academic_suffixes):
-            return False
-
-        return True
-
-    def _score_term(self, token: str, frequency: int, title_case_hits: int) -> float:
-        score = float(frequency * 2)
-
-        if any(token.endswith(suffix) for suffix in self.academic_suffixes):
-            score += 3.5
-
-        if len(token) >= 8:
-            score += 1.0
-
-        if "-" in token:
-            score += 0.5
-
-        if title_case_hits == 0:
-            score += 1.0
-        elif frequency >= 3:
-            score += 0.5
-
-        return score
-
-    def _display_term(self, token: str) -> str:
-        parts = token.split("-")
-        return "-".join(part.capitalize() if part else part for part in parts)
 
     def _normalize_term(self, value: str | None) -> str:
         if not value:

@@ -40,8 +40,35 @@ export default function AuthForm({
     }
   };
 
+  /* Dot positions: [top%, left%, size px, opacity] */
+  const dots = [
+    [18, 60, 6, 0.45],
+    [30, 8,  8, 0.5],
+    [55, 4,  5, 0.35],
+    [70, 22, 7, 0.4],
+    [80, 55, 5, 0.3],
+    [15, 78, 5, 0.4],
+    [48, 88, 6, 0.35],
+    [65, 70, 4, 0.3],
+    [88, 40, 6, 0.35],
+  ];
+
   return (
     <div className="auth-shell">
+      {/* Floating dots */}
+      <div className="auth-dots" aria-hidden="true">
+        {dots.map(([top, left, size, opacity], i) => (
+          <div
+            key={i}
+            className="auth-dot"
+            style={{ top: `${top}%`, left: `${left}%`, width: size, height: size, opacity }}
+          />
+        ))}
+      </div>
+
+      {/* Bottom-right petal decoration */}
+      <div className="auth-petal" aria-hidden="true" />
+
       <div className="auth-card">
         <h1>{title}</h1>
         <p>{description}</p>
@@ -54,7 +81,7 @@ export default function AuthForm({
                 id="displayName"
                 name="displayName"
                 type="text"
-                placeholder="Ada Lovelace"
+                placeholder="Full name"
                 value={values.displayName}
                 onChange={handleChange}
                 required
@@ -68,7 +95,7 @@ export default function AuthForm({
               id="email"
               name="email"
               type="email"
-              placeholder="student@university.edu"
+              placeholder="Email"
               value={values.email}
               onChange={handleChange}
               required
@@ -81,7 +108,7 @@ export default function AuthForm({
               id="password"
               name="password"
               type="password"
-              placeholder="Minimum 6 characters"
+              placeholder="Password"
               value={values.password}
               onChange={handleChange}
               minLength={6}

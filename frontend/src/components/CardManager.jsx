@@ -2,17 +2,23 @@ import { useEffect, useState } from "react";
 import { createCard, deleteCard, updateCard } from "../api/cardsApi";
 import { useAuth } from "../context/AuthContext";
 
-export default function CardManager({ deckId, initialCards, onCardChange }) {
+export default function CardManager({ deckId, initialCards, onCardChange, autoOpenForm }) {
   const { user, loading } = useAuth();
   const [cards, setCards] = useState(initialCards || []);
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState(null);
+
+  // Auto-open form when triggered from parent
+  useEffect(() => {
+    if (autoOpenForm) setIsAdding(true);
+  }, [autoOpenForm]);
   
   // Form states
   const [term, setTerm] = useState("");
   const [translation, setTranslation] = useState("");
   const [pronunciation, setPronunciation] = useState("");
   const [exampleSentence, setExampleSentence] = useState("");
+  const [exampleTranslation, setExampleTranslation] = useState("");
   
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
@@ -29,6 +35,7 @@ export default function CardManager({ deckId, initialCards, onCardChange }) {
     setTranslation("");
     setPronunciation("");
     setExampleSentence("");
+    setExampleTranslation("");
     setIsAdding(false);
     setEditingId(null);
     setError("");
@@ -39,6 +46,7 @@ export default function CardManager({ deckId, initialCards, onCardChange }) {
     setTranslation(card.translation);
     setPronunciation(card.pronunciation || "");
     setExampleSentence(card.example_sentence || "");
+    setExampleTranslation(card.example_translation || "");
     setEditingId(card.id);
     setIsAdding(false);
     setError("");
@@ -64,6 +72,7 @@ export default function CardManager({ deckId, initialCards, onCardChange }) {
       translation: translation.trim(),
       pronunciation: pronunciation.trim() || null,
       example_sentence: exampleSentence.trim() || null,
+      example_translation: exampleTranslation.trim() || null,
     };
 
     try {
@@ -85,17 +94,19 @@ export default function CardManager({ deckId, initialCards, onCardChange }) {
   };
 
   const handleDelete = async (cardId) => {
+    console.log("Delete clicked for card:", cardId);
     if (loading || !user) {
       alert("Your session is still loading. Please try again.");
       return;
     }
 
-    if (!window.confirm("Are you sure you want to delete this card?")) return;
     try {
       await deleteCard(user, cardId);
-      setCards(cards.filter(c => c.id !== cardId));
+      console.log("Card deleted successfully:", cardId);
+      setCards(prev => prev.filter(c => c.id !== cardId));
       if (onCardChange) onCardChange(-1); // Decrement count
     } catch (err) {
+      console.error("Delete failed:", err);
       alert("Failed to delete card: " + err.message);
     }
   };
@@ -132,8 +143,13 @@ export default function CardManager({ deckId, initialCards, onCardChange }) {
           </div>
           
           <div className="form-group">
-            <label htmlFor="exampleSentence">Example Sentence (optional)</label>
+            <label htmlFor="exampleSentence">Example Sentence (English, optional)</label>
             <textarea id="exampleSentence" value={exampleSentence} onChange={e => setExampleSentence(e.target.value)} disabled={isSaving} rows={2} />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="exampleTranslation">Example Translation (Turkish, optional)</label>
+            <textarea id="exampleTranslation" value={exampleTranslation} onChange={e => setExampleTranslation(e.target.value)} disabled={isSaving} rows={2} />
           </div>
 
           <div className="inline-actions" style={{ marginTop: '1rem' }}>
@@ -158,6 +174,7 @@ export default function CardManager({ deckId, initialCards, onCardChange }) {
                 <p style={{ margin: '0 0 0.25rem 0', fontWeight: '500' }}>{card.translation}</p>
                 {card.pronunciation && <p style={{ margin: '0 0 0.25rem 0', color: '#666', fontSize: '0.9rem' }}>🗣️ {card.pronunciation}</p>}
                 {card.example_sentence && <p style={{ margin: '0', fontStyle: 'italic', fontSize: '0.9rem', color: '#444' }}>"{card.example_sentence}"</p>}
+                {card.example_translation && <p style={{ margin: '0', fontStyle: 'italic', fontSize: '0.9rem', color: '#666' }}>TR: "{card.example_translation}"</p>}
               </div>
               <div className="card-actions" style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
                 <button className="secondary-button" onClick={() => handleStartEdit(card)} style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem' }}>Edit</button>

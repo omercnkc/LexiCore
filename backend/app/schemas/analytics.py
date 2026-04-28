@@ -9,11 +9,19 @@ class DashboardSummaryResponse(BaseModel):
     reviews_last_7_days: int
     average_accuracy: float
     weakest_deck_name: str | None
+    # AI answer tracking
+    total_correct: int = 0
+    total_wrong: int = 0
+    answer_accuracy_percent: float = 0.0
+    avg_similarity_score: float = 0.0
 
 class DailyProgress(BaseModel):
     date: str # YYYY-MM-DD
     review_count: int
     accuracy: float
+    correct_count: int = 0
+    wrong_count: int = 0
 
 class WeeklyProgressResponse(BaseModel):
     days: list[DailyProgress]
+

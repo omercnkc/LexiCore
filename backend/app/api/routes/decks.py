@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.dependencies.auth import AuthenticatedUser, get_current_user
-from app.schemas.deck import DeckCreateRequest, DeckListResponse, DeckResponse
+from app.schemas.deck import DeckCreateRequest, DeckListResponse, DeckResponse, DeckUpdateRequest
 from app.services.deck_service import DeckService, get_deck_service
 from app.schemas.card import CardCreateRequest, CardListResponse, CardResponse
 from app.services.card_service import CardService, get_card_service
@@ -29,6 +29,15 @@ async def list_decks(
     return DeckListResponse(items=decks, total=len(decks))
 
 
+@router.get("/courses/{course_name}/study", response_model=StudyQueueResponse)
+async def get_course_study_queue(
+    course_name: str,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    review_service: ReviewService = Depends(get_review_service),
+):
+    cards = review_service.get_course_study_queue(user_id=current_user.uid, course_name=course_name)
+    return StudyQueueResponse(items=cards, total_due=len(cards), deck_id=f"course-{course_name}")
+
 @router.get("/{deck_id}", response_model=DeckResponse)
 async def get_deck(
     deck_id: str,
@@ -39,6 +48,18 @@ async def get_deck(
     if deck is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Deck not found.")
 
+    return deck
+
+@router.patch("/{deck_id}", response_model=DeckResponse)
+async def update_deck(
+    deck_id: str,
+    payload: DeckUpdateRequest,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    deck_service: DeckService = Depends(get_deck_service),
+):
+    deck = deck_service.update_deck(user_id=current_user.uid, deck_id=deck_id, payload=payload)
+    if deck is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Deck not found.")
     return deck
 
 

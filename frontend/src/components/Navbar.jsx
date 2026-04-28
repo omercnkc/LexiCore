@@ -26,9 +26,9 @@ export default function Navbar() {
           </NavLink>
           <NavLink
             className={({ isActive }) => `navbar-link${isActive ? " is-active" : ""}`}
-            to="/decks/new"
+            to="/lessons"
           >
-            New deck
+            Lessons
           </NavLink>
         </nav>
       </div>

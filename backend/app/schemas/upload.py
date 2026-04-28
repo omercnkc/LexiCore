@@ -3,6 +3,9 @@ from typing import List, Optional
 
 class CandidateTerm(BaseModel):
     term: str
+    translation: Optional[str] = None
+    example_sentence: Optional[str] = None
+    hint: Optional[str] = None
     context: Optional[str] = None
 
 class ExtractResponse(BaseModel):
@@ -21,3 +24,4 @@ class UploadResponse(BaseModel):
     id: str
     file_name: str
     status: str
+
