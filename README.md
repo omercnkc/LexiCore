@@ -156,7 +156,3 @@ We welcome contributions from the community. Please follow our workflow to submi
 
 This project is licensed under the MIT License. You may use, distribute, and modify the code freely.
 
-## Credits
-
-- **The LexiCore Development Team:** Software Engineers and Maintainers.
-- Documented in accordance with the communication and software engineering standards of the **YMT210 English Communication Skills** course.
