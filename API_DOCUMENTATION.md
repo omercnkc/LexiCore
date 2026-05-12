@@ -1,31 +1,31 @@
-# LexiCore API Dokümantasyonu
+# LexiCore API Documentation
 
-> **Sürüm:** 0.1.0 | **Temel URL:** `http://localhost:8000` | **API Ön Eki:** `/api`
+> **Version:** 0.1.0 | **Base URL:** `http://localhost:8000` | **API Prefix:** `/api`
 
-## İçindekiler
+## Table of Contents
 
-1. [Genel Bakış](#genel-bakış)
-2. [Kimlik Doğrulama](#kimlik-doğrulama)
-3. [Durum Kodları](#durum-kodları)
-4. [Uç Noktalar (Endpoints)](#uç-noktalar)
+1. [Overview](#overview)
+2. [Authentication](#authentication)
+3. [Status Codes](#status-codes)
+4. [Endpoints](#endpoints)
 
 ---
 
-## Genel Bakış
+## Overview
 
-LexiCore API, akıllı bir flashcard öğrenme platformu için RESTful bir arka uç servisidir. FastAPI framework'ü üzerine inşa edilmiştir ve Firebase Authentication ile korunmaktadır. Tüm veri alışverişi JSON formatında gerçekleşir.
+LexiCore API is a RESTful backend service for an intelligent flashcard learning platform. It is built on the FastAPI framework and secured with Firebase Authentication. All data exchange occurs in JSON format.
 
-### Mimari Akış
+### Architectural Flow
 
 ```
-İstemci (React Frontend)
+Client (React Frontend)
     │
-    ▼  HTTP İsteği + Bearer Token
+    ▼  HTTP Request + Bearer Token
 ┌─────────────────────────┐
-│   FastAPI Uygulama       │
+│   FastAPI Application    │
 │   (CORS Middleware)      │
 ├─────────────────────────┤
-│   Auth Dependency        │  ← Firebase Token Doğrulama
+│   Auth Dependency        │  ← Firebase Token Verification
 ├─────────────────────────┤
 │   API Router (/api)      │
 │   ├── /health            │
@@ -35,37 +35,37 @@ LexiCore API, akıllı bir flashcard öğrenme platformu için RESTful bir arka 
 │   ├── /uploads           │
 │   └── /dashboard         │
 ├─────────────────────────┤
-│   Service Katmanı        │  ← İş Mantığı
+│   Service Layer          │  ← Business Logic
 ├─────────────────────────┤
-│   Firestore + Gemini AI  │  ← Veri Katmanı
+│   Firestore + Gemini AI  │  ← Data Layer
 └─────────────────────────┘
 ```
 
 ---
 
-## Kimlik Doğrulama
+## Authentication
 
-Tüm korumalı uç noktalar, HTTP isteğinin `Authorization` başlığında geçerli bir **Firebase ID Token** gerektirir.
+All protected endpoints require a valid **Firebase ID Token** in the `Authorization` header of the HTTP request.
 
 **Format:**
 ```
 Authorization: Bearer <firebase_id_token>
 ```
 
-**Doğrulanmış Kullanıcı Modeli (`AuthenticatedUser`):**
+**Authenticated User Model (`AuthenticatedUser`):**
 
-| Alan             | Tip      | Açıklama                          |
-|------------------|----------|-----------------------------------|
-| `uid`            | `string` | Firebase kullanıcı kimliği        |
-| `email`          | `string` | Kullanıcının e-posta adresi       |
-| `name`           | `string` | Kullanıcının görünen adı          |
-| `picture`        | `string` | Profil fotoğrafı URL'si           |
-| `email_verified` | `bool`   | E-posta doğrulama durumu          |
+| Field             | Type      | Description                       |
+|-------------------|-----------|-----------------------------------|
+| `uid`             | `string`  | Firebase user ID                  |
+| `email`           | `string`  | User's email address              |
+| `name`            | `string`  | User's display name               |
+| `picture`         | `string`  | Profile photo URL                 |
+| `email_verified`  | `bool`    | Email verification status         |
 
-**Hata Yanıtları:**
+**Error Responses:**
 
 ```bash
-# Token eksik veya geçersiz format
+# Token missing or invalid format
 curl -X GET http://localhost:8000/api/users/me
 ```
 ```json
@@ -77,33 +77,33 @@ curl -X GET http://localhost:8000/api/users/me
 
 ---
 
-## Durum Kodları
+## Status Codes
 
-| Kod   | Anlam                    | Açıklama                                    |
+| Code  | Meaning                  | Description                                 |
 |-------|--------------------------|---------------------------------------------|
-| `200` | OK                       | İstek başarıyla işlendi                     |
-| `201` | Created                  | Yeni kaynak başarıyla oluşturuldu           |
-| `204` | No Content               | Silme işlemi başarılı, yanıt gövdesi yok    |
-| `400` | Bad Request              | Geçersiz istek parametreleri                |
-| `401` | Unauthorized             | Kimlik doğrulama başarısız                  |
-| `404` | Not Found                | İstenen kaynak bulunamadı                   |
-| `422` | Unprocessable Entity     | Doğrulama hatası (Pydantic validation)      |
-| `500` | Internal Server Error    | Sunucu tarafında beklenmeyen hata           |
+| `200` | OK                       | Request processed successfully              |
+| `201` | Created                  | New resource created successfully           |
+| `204` | No Content               | Deletion successful, no response body       |
+| `400` | Bad Request              | Invalid request parameters                  |
+| `401` | Unauthorized             | Authentication failed                       |
+| `404` | Not Found                | Requested resource not found                |
+| `422` | Unprocessable Entity     | Validation error (Pydantic validation)      |
+| `500` | Internal Server Error    | Unexpected server-side error                |
 
 ---
 
-## Uç Noktalar
+## Endpoints
 
-### 1. Sağlık Kontrolü (Health)
+### 1. Health Check
 
 #### `GET /api/health`
-API'nin çalışır durumda olup olmadığını kontrol eder. Kimlik doğrulama **gerektirmez**.
+Checks if the API is running. Does **not** require authentication.
 
 ```bash
 curl -X GET http://localhost:8000/api/health
 ```
 
-**Yanıt — 200 OK:**
+**Response — 200 OK:**
 ```json
 {
   "status": "ok"
@@ -111,13 +111,13 @@ curl -X GET http://localhost:8000/api/health
 ```
 
 #### `GET /`
-Kök uç nokta. API'nin çalıştığını doğrular.
+Root endpoint. Verifies that the API is running.
 
 ```bash
 curl -X GET http://localhost:8000/
 ```
 
-**Yanıt — 200 OK:**
+**Response — 200 OK:**
 ```json
 {
   "message": "LexiCore API is running."
@@ -126,21 +126,21 @@ curl -X GET http://localhost:8000/
 
 ---
 
-### 2. Kullanıcılar (Users)
+### 2. Users
 
 #### `GET /api/users/me`
-Kimliği doğrulanmış kullanıcının profil bilgilerini döndürür.
+Returns profile information of the authenticated user.
 
 ```bash
 curl -X GET http://localhost:8000/api/users/me \
   -H "Authorization: Bearer <firebase_id_token>"
 ```
 
-**Yanıt — 200 OK:**
+**Response — 200 OK:**
 ```json
 {
   "uid": "abc123xyz",
-  "email": "kullanici@example.com",
+  "email": "user@example.com",
   "name": "Fatma Serra",
   "picture": "https://lh3.googleusercontent.com/photo.jpg",
   "email_verified": true
@@ -149,39 +149,39 @@ curl -X GET http://localhost:8000/api/users/me \
 
 ---
 
-### 3. Desteler (Decks)
+### 3. Decks
 
-Deste, belirli bir kurs ve konuya ait flashcard'ların mantıksal grubudur.
+A deck is a logical group of flashcards belonging to a specific course and topic.
 
-#### 3.1 `POST /api/decks` — Yeni Deste Oluştur
+#### 3.1 `POST /api/decks` — Create New Deck
 
-**İstek Gövdesi (`DeckCreateRequest`):**
+**Request Body (`DeckCreateRequest`):**
 
-| Alan          | Tip      | Zorunlu | Kısıtlamalar     | Açıklama          |
-|---------------|----------|---------|------------------|--------------------|
-| `title`       | `string` | ✅      | 1–120 karakter   | Deste başlığı      |
-| `course_name` | `string` | ✅      | 1–120 karakter   | Kurs adı            |
-| `topic_name`  | `string` | ✅      | 1–120 karakter   | Konu adı            |
+| Field         | Type      | Required | Constraints      | Description        |
+|---------------|-----------|----------|------------------|--------------------|
+| `title`       | `string`  | ✅       | 1–120 characters | Deck title         |
+| `course_name` | `string`  | ✅       | 1–120 characters | Course name        |
+| `topic_name`  | `string`  | ✅       | 1–120 characters | Topic name         |
 
 ```bash
 curl -X POST http://localhost:8000/api/decks \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{
-    "title": "Almanca A1 Kelimeler",
-    "course_name": "Almanca",
-    "topic_name": "Temel Kelimeler"
+    "title": "German A1 Words",
+    "course_name": "German",
+    "topic_name": "Basic Words"
   }'
 ```
 
-**Yanıt — 201 Created (`DeckResponse`):**
+**Response — 201 Created (`DeckResponse`):**
 ```json
 {
   "id": "deck_7f8a9b2c",
   "user_id": "abc123xyz",
-  "title": "Almanca A1 Kelimeler",
-  "course_name": "Almanca",
-  "topic_name": "Temel Kelimeler",
+  "title": "German A1 Words",
+  "course_name": "German",
+  "topic_name": "Basic Words",
   "source_type": "manual",
   "source_file_name": null,
   "created_at": "2026-05-11T20:00:00Z",
@@ -191,23 +191,23 @@ curl -X POST http://localhost:8000/api/decks \
 }
 ```
 
-#### 3.2 `GET /api/decks` — Tüm Desteleri Listele
+#### 3.2 `GET /api/decks` — List All Decks
 
 ```bash
 curl -X GET http://localhost:8000/api/decks \
   -H "Authorization: Bearer <token>"
 ```
 
-**Yanıt — 200 OK (`DeckListResponse`):**
+**Response — 200 OK (`DeckListResponse`):**
 ```json
 {
   "items": [
     {
       "id": "deck_7f8a9b2c",
       "user_id": "abc123xyz",
-      "title": "Almanca A1 Kelimeler",
-      "course_name": "Almanca",
-      "topic_name": "Temel Kelimeler",
+      "title": "German A1 Words",
+      "course_name": "German",
+      "topic_name": "Basic Words",
       "source_type": "manual",
       "source_file_name": null,
       "created_at": "2026-05-11T20:00:00Z",
@@ -220,68 +220,68 @@ curl -X GET http://localhost:8000/api/decks \
 }
 ```
 
-#### 3.3 `GET /api/decks/{deck_id}` — Tek Deste Getir
+#### 3.3 `GET /api/decks/{deck_id}` — Get Single Deck
 
-| Parametre | Konum | Tip      | Açıklama              |
-|-----------|-------|----------|-----------------------|
-| `deck_id` | Yol   | `string` | Desteye ait benzersiz ID |
+| Parameter | Location | Type      | Description           |
+|-----------|----------|-----------|-----------------------|
+| `deck_id` | Path     | `string`  | Unique ID for the deck|
 
 ```bash
 curl -X GET http://localhost:8000/api/decks/deck_7f8a9b2c \
   -H "Authorization: Bearer <token>"
 ```
 
-**Yanıt — 200 OK:** `DeckResponse` (yukarıdaki şema ile aynı)
-**Yanıt — 404 Not Found:**
+**Response — 200 OK:** `DeckResponse` (same as above schema)
+**Response — 404 Not Found:**
 ```json
 { "detail": "Deck not found." }
 ```
 
-#### 3.4 `PATCH /api/decks/{deck_id}` — Deste Güncelle
+#### 3.4 `PATCH /api/decks/{deck_id}` — Update Deck
 
-**İstek Gövdesi (`DeckUpdateRequest`):**
+**Request Body (`DeckUpdateRequest`):**
 
-| Alan    | Tip      | Zorunlu | Kısıtlamalar   |
-|---------|----------|---------|----------------|
-| `title` | `string` | ✅      | 1–120 karakter |
+| Field   | Type      | Required | Constraints      |
+|---------|-----------|----------|------------------|
+| `title` | `string`  | ✅       | 1–120 characters |
 
 ```bash
 curl -X PATCH http://localhost:8000/api/decks/deck_7f8a9b2c \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
-  -d '{ "title": "Almanca A2 Kelimeler" }'
+  -d '{ "title": "German A2 Words" }'
 ```
 
-**Yanıt — 200 OK:** Güncellenmiş `DeckResponse`
+**Response — 200 OK:** Updated `DeckResponse`
 
-#### 3.5 `DELETE /api/decks/{deck_id}` — Deste Sil
+#### 3.5 `DELETE /api/decks/{deck_id}` — Delete Deck
 
-Desteyi ve ona ait **tüm kartları** kalıcı olarak siler.
+Permanently deletes the deck and all its **cards**.
 
 ```bash
 curl -X DELETE http://localhost:8000/api/decks/deck_7f8a9b2c \
   -H "Authorization: Bearer <token>"
 ```
 
-**Yanıt — 204 No Content** (Yanıt gövdesi yoktur)
+**Response — 204 No Content** (No response body)
 
 ---
 
-### 4. Kartlar (Cards)
+### 4. Cards
 
-#### 4.1 `POST /api/decks/{deck_id}/cards` — Yeni Kart Oluştur
+#### 4.1 `POST /api/decks/{deck_id}/cards` — Create New Card
 
-**İstek Gövdesi (`CardCreateRequest`):**
+**Request Body (`CardCreateRequest`):**
 
-| Alan                  | Tip      | Zorunlu | Maks   | Açıklama                 |
-|-----------------------|----------|---------|--------|--------------------------|
-| `term`                | `string` | ✅      | 200    | Öğrenilecek terim        |
-| `translation`         | `string` | ✅      | 200    | Terimin çevirisi         |
-| `pronunciation`       | `string` | ❌      | 100    | Telaffuz bilgisi         |
-| `example_sentence`    | `string` | ❌      | 500    | Örnek cümle              |
-| `example_translation` | `string` | ❌      | 500    | Örnek cümle çevirisi     |
-| `hint`                | `string` | ❌      | 300    | İpucu                    |
-| `source_reference`    | `string` | ❌      | 200    | Kaynak referansı         |
+| Field                 | Type      | Required | Max    | Description              |
+|-----------------------|-----------|----------|--------|--------------------------|
+| `term`                | `string`  | ✅       | 200    | Term to learn            |
+| `translation`         | `string`  | ✅       | 200    | Translation of the term  |
+| `pronunciation`       | `string`  | ❌       | 100    | Pronunciation info       |
+| `example_sentence`    | `string`  | ❌       | 500    | Example sentence         |
+| `example_translation` | `string`  | ❌       | 500    | Example sentence trans   |
+| `hint`                | `string`  | ❌       | 300    | Hint                     |
+| `source_reference`    | `string`  | ❌       | 200    | Source reference         |
 
 ```bash
 curl -X POST http://localhost:8000/api/decks/deck_7f8a9b2c/cards \
@@ -289,26 +289,26 @@ curl -X POST http://localhost:8000/api/decks/deck_7f8a9b2c/cards \
   -H "Content-Type: application/json" \
   -d '{
     "term": "Schmetterling",
-    "translation": "Kelebek",
-    "pronunciation": "şmet-ter-ling",
+    "translation": "Butterfly",
+    "pronunciation": "shmet-ter-ling",
     "example_sentence": "Der Schmetterling fliegt im Garten.",
-    "example_translation": "Kelebek bahçede uçuyor.",
-    "hint": "Schmettern = çarpmak, vurmak"
+    "example_translation": "The butterfly is flying in the garden.",
+    "hint": "Schmettern = to strike, to hit"
   }'
 ```
 
-**Yanıt — 201 Created (`CardResponse`):**
+**Response — 201 Created (`CardResponse`):**
 ```json
 {
   "id": "card_a1b2c3d4",
   "deck_id": "deck_7f8a9b2c",
   "user_id": "abc123xyz",
   "term": "Schmetterling",
-  "translation": "Kelebek",
-  "pronunciation": "şmet-ter-ling",
+  "translation": "Butterfly",
+  "pronunciation": "shmet-ter-ling",
   "example_sentence": "Der Schmetterling fliegt im Garten.",
-  "example_translation": "Kelebek bahçede uçuyor.",
-  "hint": "Schmettern = çarpmak, vurmak",
+  "example_translation": "The butterfly is flying in the garden.",
+  "hint": "Schmettern = to strike, to hit",
   "source_reference": null,
   "created_at": "2026-05-11T20:05:00Z",
   "updated_at": "2026-05-11T20:05:00Z",
@@ -319,95 +319,95 @@ curl -X POST http://localhost:8000/api/decks/deck_7f8a9b2c/cards \
 }
 ```
 
-#### 4.2 `GET /api/decks/{deck_id}/cards` — Destedeki Kartları Listele
+#### 4.2 `GET /api/decks/{deck_id}/cards` — List Cards in Deck
 
 ```bash
 curl -X GET http://localhost:8000/api/decks/deck_7f8a9b2c/cards \
   -H "Authorization: Bearer <token>"
 ```
 
-**Yanıt — 200 OK (`CardListResponse`):**
+**Response — 200 OK (`CardListResponse`):**
 ```json
 {
-  "items": [ "...CardResponse dizisi..." ],
+  "items": [ "...CardResponse array..." ],
   "total": 12
 }
 ```
 
-#### 4.3 `GET /api/cards/{card_id}` — Tek Kart Getir
+#### 4.3 `GET /api/cards/{card_id}` — Get Single Card
 
 ```bash
 curl -X GET http://localhost:8000/api/cards/card_a1b2c3d4 \
   -H "Authorization: Bearer <token>"
 ```
 
-**Yanıt — 200 OK:** `CardResponse`
+**Response — 200 OK:** `CardResponse`
 
-#### 4.4 `PATCH /api/cards/{card_id}` — Kart Güncelle
+#### 4.4 `PATCH /api/cards/{card_id}` — Update Card
 
-**İstek Gövdesi (`CardUpdateRequest`):** `CardCreateRequest` ile aynı alanlar, ancak **tümü opsiyoneldir**. Yalnızca gönderilen alanlar güncellenir.
+**Request Body (`CardUpdateRequest`):** Same fields as `CardCreateRequest`, but **all are optional**. Only sent fields will be updated.
 
 ```bash
 curl -X PATCH http://localhost:8000/api/cards/card_a1b2c3d4 \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
-  -d '{ "translation": "Kelebek (böcek)" }'
+  -d '{ "translation": "Butterfly (insect)" }'
 ```
 
-#### 4.5 `DELETE /api/cards/{card_id}` — Kart Sil
+#### 4.5 `DELETE /api/cards/{card_id}` — Delete Card
 
 ```bash
 curl -X DELETE http://localhost:8000/api/cards/card_a1b2c3d4 \
   -H "Authorization: Bearer <token>"
 ```
 
-**Yanıt — 204 No Content**
+**Response — 204 No Content**
 
 ---
 
-### 5. Tekrar Sistemi (Spaced Repetition Review)
+### 5. Review System (Spaced Repetition Review)
 
-#### 5.1 `GET /api/decks/{deck_id}/study` — Çalışma Kuyruğu
+#### 5.1 `GET /api/decks/{deck_id}/study` — Study Queue
 
-Tekrarı gelen kartları döndürür.
+Returns cards due for review.
 
 ```bash
 curl -X GET http://localhost:8000/api/decks/deck_7f8a9b2c/study \
   -H "Authorization: Bearer <token>"
 ```
 
-**Yanıt — 200 OK (`StudyQueueResponse`):**
+**Response — 200 OK (`StudyQueueResponse`):**
 ```json
 {
-  "items": [ "...CardResponse dizisi..." ],
+  "items": [ "...CardResponse array..." ],
   "total_due": 5,
   "deck_id": "deck_7f8a9b2c"
 }
 ```
 
-#### 5.2 `GET /api/decks/courses/{course_name}/study` — Kurs Bazlı Çalışma Kuyruğu
+#### 5.2 `GET /api/decks/courses/{course_name}/study` — Course-Based Study Queue
 
-Bir kursa ait tüm destelerden tekrarı gelen kartları getirir.
+Retrieves cards due for review from all decks belonging to a course.
 
-| Parametre     | Konum | Tip      | Açıklama |
-|---------------|-------|----------|----------|
-| `course_name` | Yol   | `string` | Kurs adı |
+| Parameter     | Location | Type      | Description |
+|---------------|----------|-----------|-------------|
+| `course_name` | Path     | `string`  | Course name |
 
 ```bash
-curl -X GET http://localhost:8000/api/decks/courses/Almanca/study \
+curl -X GET http://localhost:8000/api/decks/courses/German/study \
   -H "Authorization: Bearer <token>"
 ```
 
-#### 5.3 `POST /api/cards/{card_id}/review` — Tekrar Gönder
+#### 5.3 `POST /api/cards/{card_id}/review` — Submit Review
 
-**İstek Gövdesi (`ReviewRequest`):**
+**Request Body (`ReviewRequest`):**
 
-| Alan               | Tip      | Zorunlu | Değerler                              |
-|--------------------|----------|---------|---------------------------------------|
-| `rating`           | `string` | ✅      | `"easy"`, `"medium"`, `"hard"`, `"unknown"` |
-| `is_correct`       | `bool`   | ❌      | AI cevap kontrolü sonucu              |
-| `similarity_score` | `float`  | ❌      | 0–100 arası benzerlik puanı           |
-| `user_answer`      | `string` | ❌      | Kullanıcının verdiği cevap (maks 500) |
+| Field              | Type      | Required | Values                                |
+|--------------------|-----------|----------|---------------------------------------|
+| `rating`           | `string`  | ✅       | `"easy"`, `"medium"`, `"hard"`, `"unknown"` |
+| `is_correct`       | `bool`    | ❌       | AI answer check result                |
+| `similarity_score` | `float`   | ❌       | Similarity score between 0–100        |
+| `user_answer`      | `string`  | ❌       | Answer given by the user (max 500)    |
 
 ```bash
 curl -X POST http://localhost:8000/api/cards/card_a1b2c3d4/review \
@@ -417,11 +417,11 @@ curl -X POST http://localhost:8000/api/cards/card_a1b2c3d4/review \
     "rating": "easy",
     "is_correct": true,
     "similarity_score": 95.0,
-    "user_answer": "Kelebek"
+    "user_answer": "Butterfly"
   }'
 ```
 
-**Yanıt — 200 OK (`ReviewResponse`):**
+**Response — 200 OK (`ReviewResponse`):**
 ```json
 {
   "id": "review_x1y2z3",
@@ -436,105 +436,105 @@ curl -X POST http://localhost:8000/api/cards/card_a1b2c3d4/review \
   "new_ease_factor": 2.6,
   "is_correct": true,
   "similarity_score": 95.0,
-  "user_answer": "Kelebek"
+  "user_answer": "Butterfly"
 }
 ```
 
-#### 5.4 `POST /api/cards/{card_id}/check-answer` — AI Cevap Kontrolü
+#### 5.4 `POST /api/cards/{card_id}/check-answer` — AI Answer Check
 
-Gemini AI kullanarak kullanıcının cevabını doğru cevapla karşılaştırır.
+Compares the user's answer with the correct answer using Gemini AI.
 
-**İstek Gövdesi (`AnswerCheckRequest`):**
+**Request Body (`AnswerCheckRequest`):**
 
-| Alan          | Tip      | Zorunlu | Maks | Açıklama                |
-|---------------|----------|---------|------|-------------------------|
-| `user_answer` | `string` | ✅      | 500  | Kullanıcının cevabı     |
+| Field         | Type      | Required | Max  | Description            |
+|---------------|-----------|----------|------|------------------------|
+| `user_answer` | `string`  | ✅       | 500  | User's answer          |
 
 ```bash
 curl -X POST http://localhost:8000/api/cards/card_a1b2c3d4/check-answer \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
-  -d '{ "user_answer": "Kelebek" }'
+  -d '{ "user_answer": "Butterfly" }'
 ```
 
-**Yanıt — 200 OK (`AnswerCheckResponse`):**
+**Response — 200 OK (`AnswerCheckResponse`):**
 ```json
 {
   "is_correct": true,
   "similarity_score": 98.5,
-  "correct_answer": "Kelebek",
-  "feedback": "Harika! Cevabınız doğru cevapla neredeyse birebir eşleşiyor."
+  "correct_answer": "Butterfly",
+  "feedback": "Great! Your answer almost perfectly matches the correct answer."
 }
 ```
 
 ---
 
-### 6. Dosya Yükleme (Uploads)
+### 6. File Uploads
 
-PDF dosyalarından AI destekli otomatik flashcard üretimi sağlar.
+Provides AI-powered automatic flashcard generation from PDF files.
 
-#### 6.1 `POST /api/uploads` — Dosya Yükle
+#### 6.1 `POST /api/uploads` — Upload File
 
-**İstek:** `multipart/form-data` formatında dosya yükleme.
+**Request:** File upload in `multipart/form-data` format.
 
-| Alan   | Tip          | Zorunlu | Açıklama          |
-|--------|--------------|---------|--------------------|
-| `file` | `UploadFile` | ✅      | PDF dosyası        |
+| Field  | Type         | Required | Description       |
+|--------|--------------|----------|-------------------|
+| `file` | `UploadFile` | ✅       | PDF file          |
 
 ```bash
 curl -X POST http://localhost:8000/api/uploads \
   -H "Authorization: Bearer <token>" \
-  -F "file=@almanca_ders_notu.pdf"
+  -F "file=@german_notes.pdf"
 ```
 
-**Yanıt — 201 Created (`UploadResponse`):**
+**Response — 201 Created (`UploadResponse`):**
 ```json
 {
   "id": "upload_m3n4o5p6",
-  "file_name": "almanca_ders_notu.pdf",
+  "file_name": "german_notes.pdf",
   "status": "processed"
 }
 ```
 
-#### 6.2 `POST /api/uploads/{upload_id}/extract` — Terimleri Çıkart
+#### 6.2 `POST /api/uploads/{upload_id}/extract` — Extract Terms
 
-Yüklenen PDF'den AI ile aday terimleri çıkartır.
+Extracts candidate terms from the uploaded PDF using AI.
 
 ```bash
 curl -X POST http://localhost:8000/api/uploads/upload_m3n4o5p6/extract \
   -H "Authorization: Bearer <token>"
 ```
 
-**Yanıt — 200 OK (`ExtractResponse`):**
+**Response — 200 OK (`ExtractResponse`):**
 ```json
 {
   "upload_id": "upload_m3n4o5p6",
   "terms": [
     {
       "term": "Schmetterling",
-      "translation": "Kelebek",
+      "translation": "Butterfly",
       "example_sentence": "Der Schmetterling fliegt.",
-      "hint": "Böcek türü",
-      "context": "Sayfa 3, paragraf 2"
+      "hint": "Type of insect",
+      "context": "Page 3, paragraph 2"
     }
   ]
 }
 ```
 
-#### 6.3 `POST /api/uploads/{upload_id}/generate-cards` — Kart Üret
+#### 6.3 `POST /api/uploads/{upload_id}/generate-cards` — Generate Cards
 
-Seçilen terimlerden flashcard'lar oluşturur ve bir desteye ekler.
+Creates flashcards from selected terms and adds them to a deck.
 
-**İstek Gövdesi (`GenerateCardsRequest`):**
+**Request Body (`GenerateCardsRequest`):**
 
-| Alan          | Tip        | Zorunlu | Açıklama                       |
-|---------------|------------|---------|--------------------------------|
-| `upload_id`   | `string`   | ✅      | Yükleme ID (URL ile eşleşmeli)|
-| `deck_id`     | `string`   | ❌      | Mevcut deste ID'si             |
-| `deck_title`  | `string`   | ❌      | Yeni deste başlığı             |
-| `course_name` | `string`   | ❌      | Kurs adı                       |
-| `topic_name`  | `string`   | ❌      | Konu adı                       |
-| `terms`       | `string[]` | ✅      | Seçilen terim listesi          |
+| Field         | Type       | Required | Description                    |
+|---------------|------------|----------|--------------------------------|
+| `upload_id`   | `string`   | ✅       | Upload ID (must match URL)     |
+| `deck_id`     | `string`   | ❌       | Existing deck ID               |
+| `deck_title`  | `string`   | ❌       | New deck title                 |
+| `course_name` | `string`   | ❌       | Course name                    |
+| `topic_name`  | `string`   | ❌       | Topic name                     |
+| `terms`       | `string[]` | ✅       | Selected terms list            |
 
 ```bash
 curl -X POST http://localhost:8000/api/uploads/upload_m3n4o5p6/generate-cards \
@@ -542,14 +542,14 @@ curl -X POST http://localhost:8000/api/uploads/upload_m3n4o5p6/generate-cards \
   -H "Content-Type: application/json" \
   -d '{
     "upload_id": "upload_m3n4o5p6",
-    "deck_title": "PDF - Almanca Kelimeler",
-    "course_name": "Almanca",
-    "topic_name": "Ders Notu Terimleri",
+    "deck_title": "PDF - German Words",
+    "course_name": "German",
+    "topic_name": "Lecture Note Terms",
     "terms": ["Schmetterling", "Wanderlust", "Zeitgeist"]
   }'
 ```
 
-**Yanıt — 200 OK:**
+**Response — 200 OK:**
 ```json
 {
   "message": "Cards generated successfully",
@@ -559,16 +559,16 @@ curl -X POST http://localhost:8000/api/uploads/upload_m3n4o5p6/generate-cards \
 
 ---
 
-### 7. Analitik Panosu (Dashboard Analytics)
+### 7. Analytics Dashboard
 
-#### 7.1 `GET /api/dashboard/summary` — Özet İstatistikler
+#### 7.1 `GET /api/dashboard/summary` — Summary Statistics
 
 ```bash
 curl -X GET http://localhost:8000/api/dashboard/summary \
   -H "Authorization: Bearer <token>"
 ```
 
-**Yanıt — 200 OK (`DashboardSummaryResponse`):**
+**Response — 200 OK (`DashboardSummaryResponse`):**
 ```json
 {
   "cards_due_today": 15,
@@ -577,7 +577,7 @@ curl -X GET http://localhost:8000/api/dashboard/summary \
   "reviews_today": 23,
   "reviews_last_7_days": 142,
   "average_accuracy": 78.5,
-  "weakest_deck_name": "Almanca A2 Kelimeler",
+  "weakest_deck_name": "German A2 Words",
   "total_correct": 18,
   "total_wrong": 5,
   "answer_accuracy_percent": 78.26,
@@ -585,14 +585,14 @@ curl -X GET http://localhost:8000/api/dashboard/summary \
 }
 ```
 
-#### 7.2 `GET /api/dashboard/weekly-progress` — Haftalık İlerleme
+#### 7.2 `GET /api/dashboard/weekly-progress` — Weekly Progress
 
 ```bash
 curl -X GET http://localhost:8000/api/dashboard/weekly-progress \
   -H "Authorization: Bearer <token>"
 ```
 
-**Yanıt — 200 OK (`WeeklyProgressResponse`):**
+**Response — 200 OK (`WeeklyProgressResponse`):**
 ```json
 {
   "days": [
@@ -616,62 +616,62 @@ curl -X GET http://localhost:8000/api/dashboard/weekly-progress \
 
 ---
 
-## Veri Modelleri Özet Şeması
+## Data Models Summary Schema
 
 ### DeckResponse
 
-| Alan               | Tip        | Açıklama                                |
+| Field              | Type       | Description                             |
 |--------------------|------------|-----------------------------------------|
-| `id`               | `string`   | Benzersiz deste kimliği                 |
-| `user_id`          | `string`   | Sahip kullanıcı ID'si                   |
-| `title`            | `string`   | Deste başlığı                           |
-| `course_name`      | `string`   | Ait olduğu kurs                         |
-| `topic_name`       | `string`   | Ait olduğu konu                         |
-| `source_type`      | `enum`     | `"manual"` veya `"file"`                |
-| `source_file_name` | `string?`  | Kaynak dosya adı (dosya yüklemesiyse)   |
-| `created_at`       | `datetime` | Oluşturulma zamanı (UTC)                |
-| `updated_at`       | `datetime` | Son güncellenme zamanı (UTC)            |
-| `card_count`       | `int`      | Destedeki toplam kart sayısı (≥0)       |
-| `progress_percent` | `float`    | İlerleme yüzdesi (0–100)               |
+| `id`               | `string`   | Unique deck ID                          |
+| `user_id`          | `string`   | Owner user ID                           |
+| `title`            | `string`   | Deck title                              |
+| `course_name`      | `string`   | Course it belongs to                    |
+| `topic_name`       | `string`   | Topic it belongs to                     |
+| `source_type`      | `enum`     | `"manual"` or `"file"`                  |
+| `source_file_name` | `string?`  | Source file name (if file upload)       |
+| `created_at`       | `datetime` | Creation time (UTC)                     |
+| `updated_at`       | `datetime` | Last update time (UTC)                  |
+| `card_count`       | `int`      | Total card count in deck (≥0)           |
+| `progress_percent` | `float`    | Progress percentage (0–100)             |
 
 ### CardResponse
 
-| Alan                  | Tip        | Açıklama                             |
+| Field                 | Type       | Description                          |
 |-----------------------|------------|--------------------------------------|
-| `id`                  | `string`   | Benzersiz kart kimliği               |
-| `deck_id`             | `string`   | Ait olduğu deste ID'si              |
-| `user_id`             | `string`   | Sahip kullanıcı ID'si               |
-| `term`                | `string`   | Öğrenilecek terim                    |
-| `translation`         | `string`   | Terimin çevirisi                     |
-| `pronunciation`       | `string?`  | Telaffuz                             |
-| `example_sentence`    | `string?`  | Örnek cümle                          |
-| `example_translation` | `string?`  | Örnek cümle çevirisi                 |
-| `hint`                | `string?`  | İpucu                                |
-| `source_reference`    | `string?`  | Kaynak referansı                     |
-| `created_at`          | `datetime` | Oluşturulma zamanı                   |
-| `updated_at`          | `datetime` | Son güncellenme zamanı               |
-| `next_review_at`      | `datetime` | Bir sonraki tekrar zamanı            |
-| `interval`            | `int`      | Tekrar aralığı (gün)                |
-| `ease_factor`         | `float`    | Kolaylık faktörü (SR algoritması)    |
-| `review_count`        | `int`      | Toplam tekrar sayısı                 |
+| `id`                  | `string`   | Unique card ID                       |
+| `deck_id`             | `string`   | Deck ID it belongs to                |
+| `user_id`             | `string`   | Owner user ID                        |
+| `term`                | `string`   | Term to learn                        |
+| `translation`         | `string`   | Translation of the term              |
+| `pronunciation`       | `string?`  | Pronunciation                        |
+| `example_sentence`    | `string?`  | Example sentence                     |
+| `example_translation` | `string?`  | Example sentence translation         |
+| `hint`                | `string?`  | Hint                                 |
+| `source_reference`    | `string?`  | Source reference                     |
+| `created_at`          | `datetime` | Creation time                        |
+| `updated_at`          | `datetime` | Last update time                     |
+| `next_review_at`      | `datetime` | Next review time                     |
+| `interval`            | `int`      | Review interval (days)               |
+| `ease_factor`         | `float`    | Ease factor (SR algorithm)           |
+| `review_count`        | `int`      | Total review count                   |
 
 ---
 
-## Hızlı Başlangıç
+## Quick Start
 
 ```bash
-# 1. Backend'i başlatın
+# 1. Start the Backend
 cd backend
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 
-# 2. Sağlık kontrolü yapın
+# 2. Perform health check
 curl http://localhost:8000/api/health
 
-# 3. Swagger UI'a göz atın
-# Tarayıcınızda açın: http://localhost:8000/docs
+# 3. Check out Swagger UI
+# Open in your browser: http://localhost:8000/docs
 ```
 
-> **Not:** FastAPI, `/docs` (Swagger UI) ve `/redoc` (ReDoc) adreslerinde otomatik interaktif API dokümantasyonu sunar.
+> **Note:** FastAPI provides automatic interactive API documentation at `/docs` (Swagger UI) and `/redoc` (ReDoc).
