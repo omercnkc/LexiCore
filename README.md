@@ -142,16 +142,6 @@ Our API exposes endpoints for handling uploads, decks, cards, and study sessions
 
 ---
 
-## Contributing
-
-We welcome contributions from the community. Please follow our workflow to submit your changes:
-
-1. **Fork the Repository:** Create your own copy of the project.
-2. **Create a Branch:** Use a descriptive name for your feature (`git checkout -b feature/awesome-feature`).
-3. **Write Code:** Follow existing code styles and ensure you do not introduce side effects.
-4. **Commit Changes:** Use the active voice for commit messages (`git commit -m "Add awesome feature"`).
-5. **Open a Pull Request:** Submit your changes for peer review. Our QA loop requires at least one approval before merging to ensure code quality and psychological safety within the team.
-
 ## License
 
 This project is licensed under the MIT License. You may use, distribute, and modify the code freely.
