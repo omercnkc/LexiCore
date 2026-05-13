@@ -1,24 +1,25 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useNavigate } from "react-router-dom";
 
-import { fetchDeck } from "../api/decksApi";
+import { fetchDeck, deleteDeck } from "../api/decksApi";
 import { fetchDeckCards } from "../api/cardsApi";
 import { ApiAuthError } from "../api/apiClient";
 import { useAuth } from "../context/AuthContext";
 import {
-  formatDeckCourseTopic,
   formatDeckDate,
-  formatDeckProgress,
 } from "../lib/deckUtils";
 import CardManager from "../components/CardManager";
 
 export default function DeckDetailPage() {
   const { deckId } = useParams();
+  const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
   const [deck, setDeck] = useState(null);
   const [cards, setCards] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [showAddOptions, setShowAddOptions] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     let isActive = true;
@@ -83,71 +84,62 @@ export default function DeckDetailPage() {
     }
   };
 
+  const handleDeleteDeck = async () => {
+    if (!window.confirm(`"${deck.title}" dersini ve tüm kartlarını silmek istediğinize emin misiniz?`)) return;
+    setDeleting(true);
+    try {
+      await deleteDeck(user, deckId);
+      navigate("/lessons", { replace: true });
+    } catch (err) {
+      alert("Silinemedi: " + err.message);
+      setDeleting(false);
+    }
+  };
+
   return (
     <section className="page-section">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">Deck detail</p>
-          <h1>{loading ? "Loading deck..." : deck?.title || "Deck not found"}</h1>
+          <p className="eyebrow">Ders Detayı</p>
+          <h1>{loading ? "Yükleniyor..." : deck?.title || "Ders bulunamadı"}</h1>
         </div>
         <div className="inline-actions">
           {deck?.card_count > 0 && (
             <Link className="primary-button" to={`/decks/${deck.id}/study`} style={{ background: "#10b981", borderColor: "#10b981" }}>
-              Start Study
+              Çalışmaya Başla
             </Link>
           )}
-          <Link className="secondary-button" to="/dashboard">
-            Back to dashboard
+          <Link className="secondary-button" to={`/courses/${encodeURIComponent(deck?.course_name || "")}`}>
+            Geri Dön
           </Link>
-          <Link className="primary-button" to="/decks/new">
-            Create another deck
-          </Link>
+          {deck && (
+            <button
+              className="secondary-button"
+              style={{ color: "#dc2626", borderColor: "#dc2626" }}
+              onClick={handleDeleteDeck}
+              disabled={deleting}
+            >
+              {deleting ? "Siliniyor..." : "Dersi Sil"}
+            </button>
+          )}
         </div>
       </div>
 
       {error ? <div className="form-error">{error}</div> : null}
 
-      {loading ? <div className="content-card">Loading deck details...</div> : null}
+      {loading ? <div className="content-card">Ders bilgileri yükleniyor...</div> : null}
 
       {!loading && !error && deck ? (
         <>
-          <section className="deck-detail-hero">
-            <div>
-              <p className="eyebrow">Course / topic</p>
-              <h2>{formatDeckCourseTopic(deck)}</h2>
-            </div>
-            <div className="deck-meta-stack">
-              <span>Created {formatDeckDate(deck.created_at)}</span>
-              <span>Updated {formatDeckDate(deck.updated_at)}</span>
-            </div>
-          </section>
-
-          <section className="detail-grid">
-            <article className="content-card">
-              <p className="eyebrow">Overview</p>
-              <h3>MVP deck metadata</h3>
-              <div className="detail-list">
-                <div className="detail-item">
-                  <span>Source type</span>
-                  <strong>{deck.source_type}</strong>
-                </div>
-                <div className="detail-item">
-                  <span>Source file</span>
-                  <strong>{deck.source_file_name || "None attached"}</strong>
-                </div>
-                <div className="detail-item">
-                  <span>Progress</span>
-                  <strong>{formatDeckProgress(deck.progress_percent)}</strong>
-                </div>
-                <div className="detail-item">
-                  <span>Cards</span>
-                  <strong>{deck.card_count}</strong>
-                </div>
-              </div>
-            </article>
-
-            <article style={{ gridColumn: "1 / -1", marginTop: "2rem" }}>
-              <CardManager key={deck.id} deckId={deck.id} initialCards={cards} onCardChange={handleCardCountChange} />
+          <section className="detail-grid" style={{ gridTemplateColumns: "1fr" }}>
+            <article id="card-manager-section" style={{ gridColumn: "1 / -1" }}>
+              <CardManager
+                key={deck.id}
+                deckId={deck.id}
+                initialCards={cards}
+                onCardChange={handleCardCountChange}
+                autoOpenForm={showAddOptions}
+              />
             </article>
           </section>
         </>

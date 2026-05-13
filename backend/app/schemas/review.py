@@ -1,5 +1,6 @@
 from datetime import datetime
 from enum import Enum
+from typing import Optional
 from pydantic import BaseModel, Field
 
 class ReviewRating(str, Enum):
@@ -10,6 +11,9 @@ class ReviewRating(str, Enum):
 
 class ReviewRequest(BaseModel):
     rating: ReviewRating
+    is_correct: Optional[bool] = None
+    similarity_score: Optional[float] = Field(None, ge=0, le=100)
+    user_answer: Optional[str] = Field(None, max_length=500)
 
 class ReviewResponse(BaseModel):
     id: str
@@ -22,8 +26,14 @@ class ReviewResponse(BaseModel):
     new_interval: int
     previous_ease_factor: float
     new_ease_factor: float
+    is_correct: Optional[bool] = None
+    similarity_score: Optional[float] = None
+    user_answer: Optional[str] = None
+
+from app.schemas.card import CardResponse
 
 class StudyQueueResponse(BaseModel):
-    items: list[dict] # Will use CardResponse schema directly in routing
+    items: list[CardResponse]
     total_due: int
     deck_id: str
+

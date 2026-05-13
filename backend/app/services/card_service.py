@@ -25,7 +25,7 @@ class CardService:
         deck_ref = self.decks_collection.document(deck_id)
         
         # Transaction to ensure deck exists, verify ownership, and increment card count
-        @firestore.transactional
+        @self.firestore_client.transactional
         def create_in_transaction(transaction: Transaction):
             deck_snapshot = deck_ref.get(transaction=transaction)
             if not deck_snapshot.exists:
@@ -44,6 +44,7 @@ class CardService:
                 "translation": payload.translation,
                 "pronunciation": payload.pronunciation,
                 "example_sentence": payload.example_sentence,
+                "hint": payload.hint,
                 "source_reference": payload.source_reference,
                 "created_at": timestamp,
                 "updated_at": timestamp,
@@ -111,7 +112,7 @@ class CardService:
     def delete_card(self, *, user_id: str, card_id: str) -> bool:
         card_ref = self.collection.document(card_id)
         
-        @firestore.transactional
+        @self.firestore_client.transactional
         def delete_in_transaction(transaction: Transaction):
             snapshot = card_ref.get(transaction=transaction)
             if not snapshot.exists:
@@ -151,6 +152,7 @@ class CardService:
             translation=card_data["translation"],
             pronunciation=card_data.get("pronunciation"),
             example_sentence=card_data.get("example_sentence"),
+            hint=card_data.get("hint"),
             source_reference=card_data.get("source_reference"),
             created_at=card_data["created_at"],
             updated_at=card_data["updated_at"],

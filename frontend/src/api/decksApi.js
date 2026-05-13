@@ -38,3 +38,13 @@ export async function deleteDeck(user, deckId) {
 
   return true;
 }
+
+export async function updateDeck(user, deckId, payload) {
+  const response = await authorizedFetch(`/api/decks/${deckId}`, {
+    method: "PATCH",
+    user,
+    body: JSON.stringify(payload),
+  });
+
+  return readJsonResponse(response, "Unable to update this deck.");
+}

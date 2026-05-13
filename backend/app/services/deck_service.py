@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from google.cloud.firestore_v1.base_query import FieldFilter
 
 from app.core.firebase_admin import get_firestore_client
-from app.schemas.deck import DeckCreateRequest, DeckResponse, DeckSourceType
+from app.schemas.deck import DeckCreateRequest, DeckResponse, DeckSourceType, DeckUpdateRequest
 
 
 class DeckService:
@@ -56,6 +56,22 @@ class DeckService:
             return None
 
         return self._to_response(snapshot.id, deck_data)
+
+    def update_deck(self, *, user_id: str, deck_id: str, payload: DeckUpdateRequest) -> DeckResponse | None:
+        deck_ref = self.collection.document(deck_id)
+        snapshot = deck_ref.get()
+        if not snapshot.exists:
+            return None
+
+        deck_data = snapshot.to_dict() or {}
+        if deck_data.get("user_id") != user_id:
+            return None
+
+        updated_fields = {"title": payload.title, "updated_at": datetime.now(timezone.utc)}
+        deck_ref.update(updated_fields)
+
+        deck_data.update(updated_fields)
+        return self._to_response(deck_id, deck_data)
 
     def delete_deck(self, *, user_id: str, deck_id: str) -> bool:
         deck_ref = self.collection.document(deck_id)

@@ -1,470 +1,148 @@
-# LexiCore
+# LexiCore: AI-Supported English Vocabulary Learning Platform
 
-> **Adaptive flashcard engine** powered by a heuristic term-extraction pipeline and a spaced-repetition scheduler — purpose-built for domain-dense academic content.
-
----
-
-## Table of Contents
-
-1. [Overview](#overview)
-2. [Architecture](#architecture)
-3. [Tech Stack](#tech-stack)
-4. [Repository Layout](#repository-layout)
-5. [Data Flow](#data-flow)
-6. [Spaced-Repetition Algorithm](#spaced-repetition-algorithm)
-7. [Term Extraction Pipeline](#term-extraction-pipeline)
-8. [API Reference](#api-reference)
-9. [Local Development](#local-development)
-10. [Environment Variables](#environment-variables)
-11. [Firebase Setup](#firebase-setup)
-12. [TODO / Roadmap](#todo--roadmap)
-
----
+> An adaptive flashcard application that automates term extraction from academic documents and schedules reviews using spaced-repetition.
 
 ## Overview
 
-LexiCore is a **full-stack flashcard application** designed around two core engineering decisions:
-
-1. **Automated knowledge extraction** — users upload a PDF (lecture notes, textbook chapters, research articles); the backend runs a multi-pass heuristic pipeline to surface the highest-signal academic terms from the document corpus, ranked by frequency × linguistic weight.
-
-2. **Adaptive retention scheduling** — every flashcard carries its own SM-2-inspired ease factor and interval. Each review interaction mutates these scalars via a transactional Firestore write, guaranteeing the scheduler state is never corrupted by concurrent sessions.
-
-The result is a workflow where a student can go from raw PDF source material to a fully scheduled, personalized study deck in under 60 seconds — without manual card authoring.
+LexiCore is a full-stack flashcard application built to solve the problem of manual study preparation. We designed LexiCore specifically for students and professionals who need to process domain-dense academic content quickly. Users upload a PDF document, and the backend automatically surfaces the highest-signal academic terms. The system then schedules personalized review sessions to optimize long-term memory retention.
 
 ---
 
-## Architecture
+## Features
 
-```
-┌─────────────────────────────────────────────────────┐
-│                     Client (SPA)                    │
-│   React 18 · Vite · react-router-dom · Firebase     │
-│                  Auth SDK (client)                  │
-└──────────────────────┬──────────────────────────────┘
-                       │  HTTPS + Bearer (Firebase ID Token)
-                       ▼
-┌─────────────────────────────────────────────────────┐
-│                FastAPI Application                  │
-│                                                     │
-│  ┌──────────┐  ┌──────────┐  ┌────────────────────┐│
-│  │  /upload │  │  /decks  │  │ /cards  /analytics ││
-│  │  Router  │  │  Router  │  │      Routers        ││
-│  └────┬─────┘  └────┬─────┘  └─────────┬──────────┘│
-│       │              │                  │           │
-│  ┌────▼──────────────▼──────────────────▼─────────┐ │
-│  │          Service Layer (Business Logic)         │ │
-│  │  UploadService · DeckService · CardService      │ │
-│  │  ReviewService · AnalyticsService               │ │
-│  └────────────────────┬────────────────────────────┘ │
-└───────────────────────┼─────────────────────────────┘
-                        │  Firebase Admin SDK
-          ┌─────────────┼────────────────────┐
-          ▼             ▼                    ▼
-   Firebase Auth   Firestore DB       Firebase Storage
-   (token verify)  (decks/cards/      (raw PDF blobs)
-                    reviews/uploads)
-```
-
-**Design Principles:**
-- **Stateless API** — every request carries a Firebase ID Token; the dependency layer validates it and injects `user_id` scoped to the authenticated principal. No session state is persisted server-side.
-- **Fail-fast startup** — `lifespan` context manager validates Firebase Admin initialization before accepting traffic, surfacing misconfiguration at boot rather than at runtime.
-- **Transactional SR writes** — `ReviewService.submit_review` executes both the card state mutation and the review record creation inside a single Firestore transaction, preventing partial updates under concurrent load.
+- **Automated Term Extraction:** The system extracts key vocabulary from uploaded PDF documents using a heuristic pipeline.
+- **Adaptive Spaced-Repetition:** The application calculates optimal review intervals using a custom SM-2 algorithm.
+- **Seamless Deck Management:** You can create custom decks, add manual cards, and organize your lessons.
+- **Study Analytics:** The dashboard tracks your progress and visualizes your 7-day review history.
 
 ---
 
-## Tech Stack
+## Getting Started
 
-| Layer | Technology | Rationale |
-|---|---|---|
-| **Frontend Framework** | React 18 (Vite) | Fast HMR, ESM-native, minimal config overhead |
-| **Routing** | react-router-dom v6 | Nested route model maps cleanly to protected/public split |
-| **Authentication (Client)** | Firebase Auth SDK | OAuth + email/password with zero backend session management |
-| **Backend Framework** | FastAPI 0.110+ | Async-first, Pydantic v2 native, auto OpenAPI generation |
-| **Runtime** | Python 3.11+ / Uvicorn | ASGI, optimal asyncio performance |
-| **Auth Verification** | firebase-admin 6.x | Server-side ID token verification without network round-trips |
-| **Primary Database** | Cloud Firestore | Document model suits heterogeneous card payloads; real-time capable |
-| **File Storage** | Firebase Storage | Co-located with Firestore, IAM-integrated ACL |
-| **PDF Parsing** | pypdf 4.x | Pure-Python, no native binary dependency |
-| **Validation** | Pydantic v2 | Field-level constraint enforcement, strip-and-validate pattern |
-| **CORS** | FastAPI CORSMiddleware | Configurable per-env origins via settings |
-
----
-
-## Repository Layout
-
-```
-LexiCore/
-├── backend/
-│   ├── app/
-│   │   ├── api/
-│   │   │   ├── router.py            # Central APIRouter aggregator
-│   │   │   └── routes/              # Route modules (uploads, decks, cards, reviews, analytics)
-│   │   ├── core/
-│   │   │   ├── config.py            # Pydantic Settings — env-driven config
-│   │   │   └── firebase_admin.py    # Admin SDK singleton (lazy-init)
-│   │   ├── dependencies/            # FastAPI Depends() providers (auth token → user_id)
-│   │   ├── schemas/                 # Pydantic request/response models
-│   │   │   ├── card.py
-│   │   │   ├── deck.py
-│   │   │   ├── review.py
-│   │   │   ├── upload.py
-│   │   │   └── analytics.py
-│   │   ├── services/                # Business logic layer
-│   │   │   ├── upload_service.py    # PDF ingestion + heuristic term extraction
-│   │   │   ├── deck_service.py      # Deck CRUD + card-count denormalization
-│   │   │   ├── card_service.py      # Card CRUD + SR field initialization
-│   │   │   ├── review_service.py    # SM-2 scheduler + transactional review writes
-│   │   │   └── analytics_service.py # Dashboard metrics + 7-day progress aggregation
-│   │   └── main.py                  # FastAPI app factory + lifespan + CORS
-│   ├── .env.example
-│   └── requirements.txt
-│
-├── frontend/
-│   ├── src/
-│   │   ├── api/                     # Axios wrappers (uploadsApi, decksApi, cardsApi …)
-│   │   ├── components/              # Shared UI (AppLayout, ProtectedRoute, PublicOnlyRoute …)
-│   │   ├── context/
-│   │   │   └── AuthContext.jsx      # Firebase Auth observer → React context
-│   │   ├── lib/
-│   │   │   └── firebase.js          # Firebase app init (client SDK)
-│   │   ├── pages/
-│   │   │   ├── DashboardPage.jsx    # Analytics summary + deck list
-│   │   │   ├── UploadPage.jsx       # Multi-phase upload → extract → preview → generate
-│   │   │   ├── DeckDetailPage.jsx   # Card list within a deck
-│   │   │   ├── CreateDeckPage.jsx   # Manual deck creation form
-│   │   │   ├── StudyPage.jsx        # SR study session UI
-│   │   │   ├── LoginPage.jsx
-│   │   │   └── RegisterPage.jsx
-│   │   ├── App.jsx                  # Route tree (public / protected split)
-│   │   └── index.css                # Global design tokens + component styles
-│   ├── .env.example
-│   ├── index.html
-│   ├── package.json
-│   └── vite.config.js
-│
-├── firebase/                        # Firebase project config (firestore.rules, indexes …)
-├── .gitignore
-└── README.md
-```
-
----
-
-## Data Flow
-
-### Upload → Extract → Generate Pipeline
-
-```
-User selects PDF
-      │
-      ▼
-POST /api/v1/uploads/upload
-  · firebase-admin verifies ID Token
-  · PDF streamed → Firebase Storage (uploads/{uid}/{uuid}_{filename})
-  · Firestore uploads/{uploadId} created (status: "pending")
-  · Returns { id, file_name, status }
-      │
-      ▼
-POST /api/v1/uploads/{uploadId}/extract
-  · PDF downloaded from Storage into memory (BytesIO)
-  · pypdf extracts raw text across all pages
-  · Heuristic pipeline scores & ranks candidate terms
-  · Firestore status updated to "completed"
-  · Returns { terms: [{ term, context }] }  (max 50 terms)
-      │
-      ▼
-User reviews term checklist → submits deck metadata
-      │
-      ▼
-POST /api/v1/uploads/{uploadId}/generate-cards
-  · New Deck document created in Firestore (or existing deck is reused)
-  · De-duplication check against existing card terms (normalized lowercase)
-  · One CardDocument per accepted term written to Firestore
-    (translation initialized as "TBD", SR fields seeded at defaults)
-  · Returns { deck_id }
-```
-
-### Study Session Flow
-
-```
-GET /api/v1/reviews/{deckId}/queue
-  · Loads all cards for deck from Firestore
-  · Filters by next_review_at <= now (UTC)
-  · Sorts ascending by next_review_at (most overdue first)
-  · Returns ordered CardResponse list
-      │
-      ▼
-User rates each card: EASY / MEDIUM / HARD / UNKNOWN
-      │
-      ▼
-POST /api/v1/reviews/submit
-  · Firestore transaction:
-    1. Read current card state (interval, ease_factor, review_count)
-    2. Apply SM-2 variant (see algorithm section)
-    3. Write updated card state
-    4. Write new ReviewRecord document
-  · Returns ReviewResponse (new interval, new ease, reviewed_at)
-```
-
----
-
-## Spaced-Repetition Algorithm
-
-LexiCore implements a **simplified SM-2 variant**. Each card carries three mutable scalars:
-
-| Field | Type | Description |
-|---|---|---|
-| `interval` | `int` (days) | Days until this card is next eligible for review |
-| `ease_factor` | `float` | Multiplier controlling interval growth; clamped ≥ 1.3 |
-| `review_count` | `int` | Total number of completed reviews |
-
-**Transition rules per rating:**
-
-| Rating | Ease Delta | Interval Resolution |
-|---|---|---|
-| `EASY` | `+0.15` | `interval = 4` (first) or `⌊prev × new_ease⌋` |
-| `MEDIUM` | `0` | `interval = 1` (first) or `⌊prev × 1.5⌋` |
-| `HARD` | `−0.15` (clamped ≥ 1.3) | `max(1, ⌊prev / 2⌋)` |
-| `UNKNOWN` | `−0.20` (clamped ≥ 1.3) | `0` — card re-enters queue next session |
-
-`next_review_at = UTC_now + timedelta(days=new_interval)`
-
-All mutations occur inside a Firestore transaction — concurrent submissions for the same card are serialized at the database level.
-
----
-
-## Term Extraction Pipeline
-
-`UploadService._extract_candidate_terms` implements a **multi-stage, lexicon-driven filter + scoring approach**:
-
-**Stage 1 — Tokenization**
-- Regex: `\b[A-Za-z][A-Za-z-]{2,29}\b` — captures hyphenated compounds (e.g., `dose-response`)
-- Soft-hyphen (`\u00ad`) stripped prior to tokenization to normalize PDF line-break artifacts
-
-**Stage 2 — Filtering** (`_is_likely_term`)
-- Length gate: tokens < 4 characters rejected unless in `protected_short_terms`
-- Numeric gate: any digit in token → rejected
-- Lexicon gates: stopwords, conjunctions, pronouns, common adjectives/verbs/first names
-- Frequency gate: tokens appearing < 2 times rejected unless they carry an academic suffix
-
-**Stage 3 — Scoring** (`_score_term`) — additive model:
-- `base = frequency × 2`
-- Academic suffix match (e.g., `-tion`, `-ology`, `-emia`): `+3.5`
-- Length ≥ 8 characters: `+1.0`
-- Hyphenated compound: `+0.5`
-- Exclusively lowercase in source (not a proper noun): `+1.0`
-
-**Output:** Top 50 terms by descending score, display-formatted to title-case with hyphen preservation.
-
----
-
-## API Reference
-
-All endpoints are prefixed with `/api/v1`. Authentication is required on all routes except `GET /`.
-
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/` | Health check |
-| `POST` | `/uploads/upload` | Upload PDF to Firebase Storage |
-| `POST` | `/uploads/{id}/extract` | Extract candidate terms from uploaded PDF |
-| `POST` | `/uploads/{id}/generate-cards` | Create deck + cards from selected terms |
-| `GET` | `/decks` | List all decks for authenticated user |
-| `POST` | `/decks` | Create a new deck manually |
-| `GET` | `/decks/{deckId}` | Get deck details |
-| `DELETE` | `/decks/{deckId}` | Delete deck and all associated cards |
-| `GET` | `/decks/{deckId}/cards` | List all cards in a deck |
-| `POST` | `/decks/{deckId}/cards` | Create a card manually |
-| `PATCH` | `/cards/{cardId}` | Update card fields |
-| `DELETE` | `/cards/{cardId}` | Delete a card |
-| `GET` | `/reviews/{deckId}/queue` | Get due cards for a study session |
-| `POST` | `/reviews/submit` | Submit a review rating for a card |
-| `GET` | `/analytics/dashboard` | Dashboard summary metrics |
-| `GET` | `/analytics/weekly-progress` | 7-day review history per day |
-
----
-
-## Local Development
+This section guides newcomers through the setup process. We assume you have no prior knowledge of the project structure.
 
 ### Prerequisites
 
-- Python 3.11+
-- Node.js 18+
-- Firebase project with Auth, Firestore, and Storage enabled
-- Firebase service account JSON (for backend)
+Before you begin, install the following required software:
+- **Python 3.11** or newer
+- **Node.js 18** or newer
+- A **Google Firebase** account
 
-### Backend
+### Installation Guide
+
+#### 1. Clone the Repository
+
+Clone the project to your local machine:
+```bash
+git clone https://github.com/your-username/LexiCore.git
+cd LexiCore
+```
+
+#### 2. Configure Firebase
+
+LexiCore requires Firebase for database and authentication services.
+1. Open the [Firebase Console](https://console.firebase.google.com/) and create a new project.
+2. Enable **Authentication** (Select Email/Password).
+3. Enable **Firestore Database** (Start in production mode).
+4. Enable **Firebase Storage**.
+5. Navigate to Project Settings -> Service Accounts -> Generate a new private key.
+6. Save the downloaded JSON file as `backend/service-account.json`.
+
+#### 3. Set Up the Backend
+
+We use Python and FastAPI to run the backend server. Run these commands to start it:
 
 ```bash
 cd backend
-python -m venv .venv
-# Windows
-.venv\Scripts\activate
-# macOS/Linux
-source .venv/bin/activate
 
+# Create and activate a virtual environment
+python -m venv .venv
+.venv\Scripts\activate  # On macOS/Linux use: source .venv/bin/activate
+
+# Install required dependencies
 pip install -r requirements.txt
-cp .env.example .env   # fill in values
+
+# Create the environment configuration file
+cp .env.example .env
+```
+*Note: Open `backend/.env` and update the values with your Firebase project details.*
+
+Start the backend API server:
+```bash
 uvicorn app.main:app --reload --port 8000
 ```
+*The API runs at `http://localhost:8000`. You can view the interactive documentation at `http://localhost:8000/docs`.*
 
-API will be available at `http://localhost:8000`.
-Interactive docs at `http://localhost:8000/docs`.
+#### 4. Set Up the Frontend
 
-### Frontend
+We use React and Vite to run the client interface. Open a new terminal window and run these commands:
 
 ```bash
 cd frontend
+
+# Install JavaScript dependencies
 npm install
-cp .env.example .env   # fill in Firebase client config
+
+# Create the environment configuration file
+cp .env.example .env
+```
+*Note: Open `frontend/.env` and add your Firebase Web Client credentials.*
+
+Start the frontend development server:
+```bash
 npm run dev
 ```
-
-SPA will be available at `http://localhost:5173`.
-
----
-
-## Environment Variables
-
-### Backend (`backend/.env`)
-
-| Variable | Description |
-|---|---|
-| `APP_NAME` | Application name (appears in OpenAPI title) |
-| `API_PREFIX` | Route prefix (e.g., `/api/v1`) |
-| `CORS_ORIGINS` | Comma-separated allowed origins |
-| `FIREBASE_SERVICE_ACCOUNT_PATH` | Absolute path to service account JSON |
-| `FIREBASE_STORAGE_BUCKET` | GCS bucket name (e.g., `your-project.appspot.com`) |
-
-### Frontend (`frontend/.env`)
-
-| Variable | Description |
-|---|---|
-| `VITE_API_BASE_URL` | Backend base URL |
-| `VITE_FIREBASE_API_KEY` | Firebase Web API key |
-| `VITE_FIREBASE_AUTH_DOMAIN` | Firebase auth domain |
-| `VITE_FIREBASE_PROJECT_ID` | Firebase project ID |
-| `VITE_FIREBASE_STORAGE_BUCKET` | Firebase storage bucket |
-| `VITE_FIREBASE_MESSAGING_SENDER_ID` | Firebase messaging sender ID |
-| `VITE_FIREBASE_APP_ID` | Firebase app ID |
+*The web application runs at `http://localhost:5173`.*
 
 ---
 
-## Firebase Setup
+## Usage Instructions
 
-1. Create a Firebase project at [console.firebase.google.com](https://console.firebase.google.com)
-2. Enable **Authentication** → Email/Password provider
-3. Enable **Firestore Database** → Start in production mode
-4. Enable **Storage** → Default bucket
-5. Generate a **Service Account** key (Project Settings → Service accounts → Generate new private key) and save as `backend/service-account.json`
-6. Deploy Firestore security rules from `firebase/` directory
+Follow these steps to study with LexiCore:
+1. **Register an Account:** Open `http://localhost:5173` and create a new user account.
+2. **Upload a Document:** Navigate to the "Lessons" page and upload an academic PDF.
+3. **Generate Flashcards:** Review the terms our system extracts from your file, and click "Generate" to build your deck.
+4. **Study:** Start a study session. Rate your recall for each card (Easy, Medium, Hard, Unknown). LexiCore schedules the next review automatically.
 
-**Required Firestore Composite Index:**
+---
+
+## Developer Guide & Architecture
+
+This section provides maintainers with technical context, architectural diagrams, and API references.
+
+### System Architecture
+
+We separate the application into a React Single-Page Application (SPA) and a FastAPI backend service.
+
+```mermaid
+graph TD
+    Client[Client SPA<br/>React 18 + Vite] -->|HTTPS + Bearer Token| API[FastAPI Backend]
+    API -->|Admin SDK Verify| Auth[Firebase Auth]
+    API -->|Read/Write Decks & Reviews| Firestore[Firestore Database]
+    API -->|Store PDF Files| Storage[Firebase Storage]
 ```
-Collection: cards
-Fields:     user_id (Ascending), next_review_at (Ascending)
-```
-This index is required for the optimized due-card count query in `AnalyticsService`. Without it, the service falls back to a full collection scan (functional but unscalable).
+
+### Core Mechanisms
+
+- **Stateless API:** The backend requires a Firebase ID Token for every request. It authenticates users without storing session state.
+- **Transactional Writes:** The system executes spaced-repetition updates (card state mutations) inside a single Firestore transaction to prevent data corruption.
+- **Extraction Pipeline:** The backend downloads the PDF into memory, parses the text, and scores terms based on frequency, length, and academic suffixes.
+
+### API Reference
+
+Our API exposes endpoints for handling uploads, decks, cards, and study sessions.
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/api/v1/uploads/upload` | Uploads a PDF to Firebase Storage. |
+| `POST` | `/api/v1/uploads/{id}/extract` | Extracts candidate terms from the PDF. |
+| `POST` | `/api/v1/uploads/{id}/generate-cards` | Creates a deck and flashcards from selected terms. |
+| `GET` | `/api/v1/reviews/{deckId}/queue` | Retrieves due cards for a study session. |
+| `POST` | `/api/v1/reviews/submit` | Submits a review rating and calculates the new interval. |
 
 ---
 
-## TODO / Roadmap
+## License
 
-The following items represent known gaps in the current implementation. Each entry documents what is missing, why it matters architecturally, and what it unblocks.
+This project is licensed under the MIT License. You may use, distribute, and modify the code freely.
 
----
-
-### 🔴 Critical — Core Functionality Gaps
-
-#### `[ ]` LLM / Dictionary Translation Pipeline
-**What's missing:** Cards generated from PDF extraction are initialized with `translation = "TBD"`. There is no automated mechanism to populate translations.  
-**Why it matters:** The central value proposition of a flashcard app is the term-to-definition pairing. Without automated translation, the user must manually edit every single card — negating the productivity gain of the extraction pipeline.  
-**Unblocks:** Full end-to-end zero-touch deck creation; enables multi-language support (EN→TR, EN→DE, etc.)  
-**Suggested approach:** POST-generation async job that calls a dictionary API (e.g., Merriam-Webster, DeepL, or OpenAI Chat Completions) per term and back-patches `translation` + `example_sentence`.
-
----
-
-#### `[ ]` Pronunciation / Text-to-Speech (TTS)
-**What's missing:** The card schema includes a `pronunciation` field, but there is no pipeline to automatically fetch IPA data or text-to-speech audio for terms.  
-**Why it matters:** For language learning and rigorous vocabulary acquisition, auditory reinforcement is critical.  
-**Unblocks:** Multi-sensory study experience; complete language support.
-
----
-
-#### `[ ]` AI-Powered Semantic Extraction Filter
-**What's missing:** The current extraction pipeline is purely statistical and rule-based (heuristics). It lacks a semantic evaluation step.  
-**Why it matters:** Heuristics can let non-valuable words slip through (e.g., irrelevant proper nouns or edge-case adjectives). Passing candidate terms through a lightweight LLM prompt ("Is this an academic domain term?") would drastically reduce false positives.  
-**Unblocks:** True production-grade extraction quality requiring minimal user pruning.
-
----
-
-#### `[x]` Card Edit UI
-**Status:** Completed. Users can now edit translations and terms inline to refine extracted cards.
-
----
-
-#### `[x]` Card Delete UI
-**Status:** Completed. Users have a dedicated action to prune irrelevant terms extracted from PDFs.
-
----
-
-### 🟡 Important — Quality & Reliability
-
-#### `[ ]` Firestore Composite Index Automation
-**What's missing:** The composite index on `cards(user_id, next_review_at)` (required by `AnalyticsService`) must be created manually in the Firebase console. There is no `firestore.indexes.json` in the `firebase/` directory.  
-**Why it matters:** Without the index, `AnalyticsService.get_dashboard_summary` silently falls back to a full collection scan. This is a critical performance regression at scale — O(n) reads per dashboard load versus O(log n).  
-**Unblocks:** Production-safe analytics; auto-deployed infrastructure via `firebase deploy`.
-
----
-
-#### `[ ]` Firestore Security Rules
-**What's missing:** No `firestore.rules` file exists. The database is either in development-open mode (allows all reads/writes) or production-locked mode (blocks all client access). Neither is correct for a deployed application.  
-**Why it matters:** Without rules, Firestore is either a security liability or non-functional. In production, every document must be gated to the owning `user_id`.  
-**Unblocks:** Secure deployment; passes Firebase security audit.
-
----
-
-#### `[ ]` Input Sanitization for Uploaded Filenames
-**What's missing:** `upload_service.process_upload` assigns `safe_filename = file.filename` directly without sanitizing path traversal characters (`../`, null bytes, excessively long names).  
-**Why it matters:** Malformed filenames could construct adversarial GCS object paths, depending on the storage backend's behavior.  
-**Unblocks:** Secure file ingestion; backend hardening milestone.
-
----
-
-### 🟢 Enhancement — User Experience
-
-#### `[ ]` Async Term Extraction (Background Job)
-**What's missing:** `extract_terms` is a synchronous, blocking HTTP call. For large PDFs, this creates long-polling timeouts and a poor UX (spinner with no feedback).  
-**Why it matters:** FastAPI's ASGI runtime can handle concurrent requests efficiently, but a blocking service call on the request thread negates this.  
-**Unblocks:** Support for large documents (>50 pages); better perceived performance.  
-**Suggested approach:** FastAPI `BackgroundTasks` or Celery worker; poll endpoint or WebSocket for extraction status.
-
----
-
-#### `[ ]` Multi-file / EPUB / DOCX Upload Support
-**What's missing:** The upload pipeline is hard-gated to PDF only (`file.filename.lower().endswith(".pdf")`).  
-**Why it matters:** Students generate notes in Word, export from EPUBs, or share plain-text files. Single-format restriction is a significant adoption barrier.  
-**Unblocks:** Broader user base; richer source material variety.
-
----
-
-#### `[ ]` Deck Sharing / Export
-**What's missing:** Decks are private to the authenticated user. There is no export-to-CSV, export-to-Anki (.apkg), or deck sharing mechanism.  
-**Why it matters:** Peer study groups (a primary use case for flashcard tools) are not supported. Anki compatibility would allow power users to migrate freely.  
-**Unblocks:** Collaborative study workflows; Anki interoperability.
-
----
-
-#### `[ ]` Study Session Progress Persistence
-**What's missing:** `StudyPage` maintains session progress in local React state only. If a user navigates away mid-session or the browser tab is closed, all progress for that session is lost (reviewed cards are already written, but the session queue state resets).  
-**Why it matters:** Long study sessions are interrupted by real-world distractions. Losing session context forces the user to restart the queue, re-reviewing already-rated cards.  
-**Unblocks:** Reliable long-form study sessions; mobile usage patterns.
-
----
-
-#### `[ ]` User Profile & Settings Page
-**What's missing:** No account management UI — users cannot change their display name, email, or password from within the application.  
-**Why it matters:** Standard UX expectation for any authenticated application.  
-**Unblocks:** Production-ready user lifecycle management.
-
----
-
-*Last updated: April 2026*

@@ -6,6 +6,9 @@ import {
   signInWithEmailAndPassword,
   signOut,
   updateProfile,
+  updatePassword,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
 } from "firebase/auth";
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 
@@ -102,6 +105,22 @@ export function AuthProvider({ children }) {
     }
   };
 
+  const updateUserProfile = async ({ displayName }) => {
+    if (!auth.currentUser) throw new Error("Kullanıcı oturumu bulunamadı.");
+    await updateProfile(auth.currentUser, { displayName });
+    await auth.currentUser.reload();
+    const refreshed = await ensureUserProfile(auth.currentUser, { displayName });
+    setProfile(refreshed);
+    setUser({ ...auth.currentUser });
+  };
+
+  const updateUserPassword = async ({ currentPassword, newPassword }) => {
+    if (!auth.currentUser) throw new Error("Kullanıcı oturumu bulunamadı.");
+    const credential = EmailAuthProvider.credential(auth.currentUser.email, currentPassword);
+    await reauthenticateWithCredential(auth.currentUser, credential);
+    await updatePassword(auth.currentUser, newPassword);
+  };
+
   const value = {
     user,
     profile,
@@ -109,6 +128,8 @@ export function AuthProvider({ children }) {
     login,
     register,
     logout,
+    updateUserProfile,
+    updateUserPassword,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

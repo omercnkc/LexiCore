@@ -71,6 +71,12 @@ class AnalyticsService:
         reviews_today = 0
         total_score = 0
         
+        # AI answer tracking
+        total_correct = 0
+        total_wrong = 0
+        similarity_sum = 0.0
+        answer_count = 0
+        
         # For weakest deck calculation
         deck_scores = {}
         
@@ -88,6 +94,18 @@ class AnalyticsService:
             score = self._rating_to_score(rating)
             total_score += score
             
+            # Track AI answer correctness
+            is_correct = r.get("is_correct")
+            if is_correct is not None:
+                answer_count += 1
+                if is_correct:
+                    total_correct += 1
+                else:
+                    total_wrong += 1
+                sim_score = r.get("similarity_score")
+                if sim_score is not None:
+                    similarity_sum += float(sim_score)
+            
             d_id = r.get("deck_id")
             if d_id:
                 if d_id not in deck_scores:
@@ -96,6 +114,8 @@ class AnalyticsService:
                 deck_scores[d_id]["count"] += 1
 
         avg_accuracy = (total_score / reviews_last_7_days) if reviews_last_7_days > 0 else 0.0
+        answer_accuracy_percent = (total_correct / answer_count * 100) if answer_count > 0 else 0.0
+        avg_similarity = (similarity_sum / answer_count) if answer_count > 0 else 0.0
         
         # Find weakest deck
         weakest_deck_name = None
@@ -118,7 +138,11 @@ class AnalyticsService:
             reviews_today=reviews_today,
             reviews_last_7_days=reviews_last_7_days,
             average_accuracy=round(avg_accuracy, 1),
-            weakest_deck_name=weakest_deck_name
+            weakest_deck_name=weakest_deck_name,
+            total_correct=total_correct,
+            total_wrong=total_wrong,
+            answer_accuracy_percent=round(answer_accuracy_percent, 1),
+            avg_similarity_score=round(avg_similarity, 1),
         )
 
     def get_weekly_progress(self, *, user_id: str) -> WeeklyProgressResponse:
@@ -131,7 +155,7 @@ class AnalyticsService:
         for i in range(6, -1, -1):
             day_date = (today_start - timedelta(days=i)).strftime("%Y-%m-%d")
             ordered_dates.append(day_date)
-            days_map[day_date] = {"count": 0, "score_sum": 0}
+            days_map[day_date] = {"count": 0, "score_sum": 0, "correct": 0, "wrong": 0}
             
         seven_days_ago = today_start - timedelta(days=6)
 
@@ -145,6 +169,13 @@ class AnalyticsService:
             if date_str in days_map:
                 days_map[date_str]["count"] += 1
                 days_map[date_str]["score_sum"] += self._rating_to_score(r.get("rating"))
+                
+                is_correct = r.get("is_correct")
+                if is_correct is not None:
+                    if is_correct:
+                        days_map[date_str]["correct"] += 1
+                    else:
+                        days_map[date_str]["wrong"] += 1
                     
         results = []
         for d_str in ordered_dates:
@@ -153,7 +184,9 @@ class AnalyticsService:
             results.append(DailyProgress(
                 date=d_str,
                 review_count=stats["count"],
-                accuracy=round(acc, 1)
+                accuracy=round(acc, 1),
+                correct_count=stats["correct"],
+                wrong_count=stats["wrong"],
             ))
             
         return WeeklyProgressResponse(days=results)

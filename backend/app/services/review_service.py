@@ -32,11 +32,51 @@ class ReviewService:
         cards = [card_svc._to_response(snapshot.id, snapshot.to_dict() or {}) for snapshot in snapshots]
         
         now = datetime.now(timezone.utc)
-        due_cards = [card for card in cards if card.next_review_at <= now]
         
-        # Prioritize cards that are most overdue
-        due_cards.sort(key=lambda c: c.next_review_at)
-        return due_cards
+        # A card is ready for study if it's due (next_review_at <= now) 
+        # OR if it's a new card (review_count == 0)
+        study_queue = [
+            card for card in cards 
+            if card.next_review_at <= now or card.review_count == 0
+        ]
+        
+        import random
+        random.shuffle(study_queue)
+        
+        return study_queue
+
+    def get_course_study_queue(self, *, user_id: str, course_name: str) -> list[CardResponse]:
+        from app.services.deck_service import get_deck_service
+        deck_svc = get_deck_service()
+        decks = deck_svc.list_user_decks(user_id=user_id)
+        course_decks = [d.id for d in decks if d.course_name == course_name]
+        
+        if not course_decks:
+            return []
+
+        # We could query cards per deck_id if the list is small, or query all and filter
+        snapshots = self.cards_collection.where(filter=FieldFilter("user_id", "==", user_id)).stream()
+        
+        card_svc = get_card_service()
+        cards = []
+        for snapshot in snapshots:
+            data = snapshot.to_dict() or {}
+            if data.get("deck_id") in course_decks:
+                cards.append(card_svc._to_response(snapshot.id, data))
+        
+        now = datetime.now(timezone.utc)
+        
+        study_queue = [
+            card for card in cards 
+            if card.next_review_at <= now or card.review_count == 0
+        ]
+        
+        import random
+        random.shuffle(study_queue)
+        
+        # Sort: New cards first, then overdue. Wait, user said "kartlar rastgele sıralanır"
+        # Since they specifically said random, let's just keep them random.
+        return study_queue
 
     def submit_review(self, *, user_id: str, card_id: str, payload: ReviewRequest) -> ReviewResponse:
         card_ref = self.cards_collection.document(card_id)
@@ -97,7 +137,10 @@ class ReviewService:
                 "previous_interval": prev_interval,
                 "new_interval": new_interval,
                 "previous_ease_factor": prev_ease,
-                "new_ease_factor": new_ease
+                "new_ease_factor": new_ease,
+                "is_correct": payload.is_correct,
+                "similarity_score": payload.similarity_score,
+                "user_answer": payload.user_answer,
             }
             transaction.set(record_ref, record_data)
             
